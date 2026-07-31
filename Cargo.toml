@@ -1,0 +1,20 @@
+[package]
+name = "agent-world"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+description = "Lean native command room for Codex and Claude"
+publish = false
+
+[dependencies]
+eframe = { version = "=0.35.0", default-features = false, features = ["accesskit", "default_fonts", "glow"] }
+rusqlite = { version = "0.40.1", default-features = false, features = ["bundled"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.24.0", features = ["serde", "v4"] }
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+panic = "abort"
+strip = true
