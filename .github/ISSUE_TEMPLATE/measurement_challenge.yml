@@ -1,0 +1,47 @@
+name: Challenge a measurement
+description: A published number does not reproduce on your machine.
+labels: [measurement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The resource table in the README is the project's central claim. If it does not
+        hold on your hardware, that is the most valuable issue you can open.
+
+  - type: dropdown
+    id: gate
+    attributes:
+      label: Which gate
+      options:
+        - Startup to interactive window (≤ 3 s)
+        - Peak private memory (≤ 250 MB)
+        - Average idle CPU (≤ 0.5%)
+        - Node processes at idle (0)
+        - Process per idle actor (No)
+    validations:
+      required: true
+
+  - type: textarea
+    id: measurement
+    attributes:
+      label: Your measurement
+      description: >
+        Paste the JSON from `.\scripts\measure.ps1 -WarmupSeconds 300 -SampleSeconds 60`.
+        Shorter warmups are accepted but say so — they change the idle CPU figure.
+      render: json
+    validations:
+      required: true
+
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Machine
+      description: CPU, RAM, GPU and driver, display scaling, and whether the window was focused.
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: Background load, virtualization, remote desktop, security software.

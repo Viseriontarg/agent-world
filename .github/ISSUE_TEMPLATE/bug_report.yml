@@ -1,0 +1,60 @@
+name: Bug report
+description: Something behaves differently than the README or the code claims.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Agent World tries not to overstate what it does. If it did anyway, that is a bug worth filing.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you observed, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. cargo build --release
+        2. .\target\release\agent-world.exe --runtime-root ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: self-check
+    attributes:
+      label: Self-check output
+      description: >
+        Output of `.\target\release\agent-world.exe --self-check`. This exercises
+        idempotency, payload-conflict rejection, and both crash-recovery windows,
+        and usually narrows the problem immediately.
+      render: json
+
+  - type: input
+    id: version
+    attributes:
+      label: Commit or release
+      placeholder: e.g. 862b870 or v0.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: toolchain
+    attributes:
+      label: Rust toolchain
+      description: Output of `rustc -Vv` (first two lines are enough).
+      placeholder: rustc 1.92.0 (x86_64-pc-windows-msvc)
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Windows build
+      placeholder: Windows 11 Pro 26100

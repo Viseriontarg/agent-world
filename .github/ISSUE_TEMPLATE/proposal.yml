@@ -1,0 +1,43 @@
+name: Proposal
+description: Suggest a capability, protocol correction, or scope change.
+labels: [proposal]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What is hard or impossible today. Describe the situation, not the feature.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you propose
+    validations:
+      required: true
+
+  - type: textarea
+    id: cost
+    attributes:
+      label: What it costs
+      description: >
+        Agent World has hard budgets: ≤ 250 MB private memory, ≤ 0.5% idle CPU,
+        zero Node processes, no process per idle actor, one renderer, one SQLite
+        writer. Which of these does the proposal pressure, and by roughly how much?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Where it belongs
+      options:
+        - Live provider lifecycle (stream, approve, interrupt, resume, fork)
+        - Orchestration lifecycle and per-worktree leases
+        - Directed, user-confirmed handoffs
+        - T3 import and verified independence
+        - Terminals, attachments, Markdown, repository surfaces
+        - Something outside the current roadmap
+    validations:
+      required: true

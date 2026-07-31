@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Architecture notes
+    url: https://github.com/Viseriontarg/agent-world/blob/main/docs/ARCHITECTURE.md
+    about: How the durable core, bounded queues, and worktree reconciliation actually work.
+  - name: Roadmap and scope boundaries
+    url: https://github.com/Viseriontarg/agent-world/blob/main/README.md#roadmap
+    about: What is proven, what is deliberately not claimed yet, and what comes next.

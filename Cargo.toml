@@ -4,6 +4,13 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.92"
 description = "Lean native command room for Codex and Claude"
+authors = ["Viseriontarg"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/Viseriontarg/agent-world"
+homepage = "https://github.com/Viseriontarg/agent-world"
+keywords = ["agents", "codex", "claude", "egui", "orchestration"]
+categories = ["development-tools", "gui"]
 publish = false
 
 [dependencies]
