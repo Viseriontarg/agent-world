@@ -2,9 +2,9 @@
 name = "agent-world"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.92"
+rust-version = "1.95"
 description = "Lean native command room for Codex and Claude"
-authors = ["Viseriontarg"]
+authors = ["Aminreza Khoshbahar"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/Viseriontarg/agent-world"

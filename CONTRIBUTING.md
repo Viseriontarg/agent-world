@@ -27,7 +27,7 @@ cd agent-world
 cargo build --release
 ```
 
-You need Windows 11, stable MSVC Rust (`rust-version = 1.92`), Visual C++ Build Tools
+You need Windows 11, Rust 1.95+ MSVC (`rust-version = 1.95`), Visual C++ Build Tools
 with a Windows SDK, and Git. The bundled SQLite is compiled from source, so `cl.exe`
 must be on `PATH` — build from a **Developer PowerShell for VS**, or run
 `vcvars64.bat` first, or `cargo build` will fail in `cc-rs` before it reaches your code.
@@ -76,7 +76,7 @@ argue, with numbers, rather than quietly spend the headroom.
   Channels between the UI and the core are `sync_channel(8)` and `sync_channel(32)`
   — bounded on purpose, so backpressure is visible rather than absorbed by an
   unbounded queue.
-- **The scene is a projection.** SQLite, command receipts, provider cursors, and Git
+- **The interface is a projection.** SQLite, command receipts, provider cursors, and Git
   are the source of truth. Nothing may be true only in the UI.
 - **Intent is durable before it is real.** Worktree plans are committed before Git
   runs, which is what makes both crash windows recoverable.
