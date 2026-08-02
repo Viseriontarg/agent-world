@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/Viseriontarg/agent-world/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Viseriontarg/agent-world/ci.yml?branch=main&style=for-the-badge&label=ci&labelColor=13202b"></a>
-  <img alt="Phase 1 proven" src="https://img.shields.io/badge/status-Phase_1_proven-36c5a5?style=for-the-badge&labelColor=13202b">
+  <img alt="Working native slice" src="https://img.shields.io/badge/status-working_native_slice-36c5a5?style=for-the-badge&labelColor=13202b">
   <img alt="Windows" src="https://img.shields.io/badge/platform-Windows-0078D4?style=for-the-badge&logo=windows11&logoColor=white&labelColor=13202b">
   <img alt="Rust 1.95+" src="https://img.shields.io/badge/Rust-1.95%2B-000000?style=for-the-badge&logo=rust&logoColor=white&labelColor=13202b">
   <a href="LICENSE"><img alt="MIT licence" src="https://img.shields.io/badge/licence-MIT-8b5cf6?style=for-the-badge&labelColor=13202b"></a>
@@ -44,19 +44,18 @@ keyboard-focusable control while the room/workstation metaphor stays in the doma
 
 ## What exists today
 
-This repository is the completed Phase‑1 executable slice—not a mock-up.
+Agent World is a working native executable slice—not a mock-up and not a completed roadmap. The durable core and list-first control surface are implemented; Windows validation, the review loop, live provider turns, and production distribution remain open proof gates.
 
-| ✅ Proven now | ⏳ Deliberately not claimed yet |
+| ✅ Implemented in this repository | ⏳ Not yet proven |
 |---|---|
-| Native `eframe/egui` application using the single `glow` renderer | Live model turns |
-| Responsive, focusable operator list with 50-actor fixture | Approval and user-input round trips |
-| Standard keyboard traversal, prompt persistence, guarded interruption, and AccessKit | Resume/fork context integrity |
-| One SQLite writer with bounded `sync_channel(8/32)` queues | T3 migration |
-| Durable events, projections, receipts, and payload-conflict rejection | Autonomous agent-to-agent loops |
-| Native Git worktree creation with crash reconciliation | Terminal, browser, PR, or remote surfaces |
-| Zero-turn Codex app-server and Claude CLI capability probes | Feature parity with T3 |
+| Native `eframe/egui/glow` application with a scrollable, focusable operator list and AccessKit enabled | Real-Windows validation at 125%, 150%, and 200% scaling with keyboard-only use, NVDA, and Narrator |
+| Standard `Tab`/`Shift+Tab` traversal, F6 attention cycling, and documented shortcut behavior covered by tests | Published keyboard-only and screen-reader task-flow results |
+| One SQLite writer, bounded queues, durable events, receipts, and payload-conflict rejection | Startup, peak private memory, idle CPU, and process-tree rerun for the current list-first executable |
+| Native Git worktree creation with crash reconciliation and conservative conflict handling | In-app diff inspection, request-changes, merge, and final-commit recording |
+| Zero-turn Codex app-server and Claude CLI capability probes | Live stream, approval/input, interrupt, resume, and fork lifecycle proof |
+| Source-build instructions and Windows CI configuration | Signed installer, update/rollback, uninstall, and release-integrity proof |
 
-If the UI says a live provider turn is unavailable, that is intentional. **Agent World does not fake lifecycle proof.**
+A provider surface probe is not a model turn, AccessKit being enabled is not a screen-reader validation result, and the historical resource baseline does not describe the current list-first build.
 
 ## Lean by measurement
 
@@ -153,14 +152,16 @@ Runtime data defaults to `%LOCALAPPDATA%\AgentWorld`.
 
 ## Roadmap
 
-- [x] Native operator list, bounded queues, SQLite proof, Git worktree proof
+- [x] Native list-first shell with bounded queues and durable SQLite state
+- [x] Conservative Git worktree creation and crash reconciliation
 - [x] Zero-turn Codex and Claude protocol-surface probes
-- [x] Historical Phase‑1 resource baseline under 250 MB / 0.5% CPU
-- [ ] Publish the Windows resource rerun for the current list-first interface
-- [ ] Live provider lifecycle: stream, approve, interrupt, resume, fork
-- [ ] Full orchestration lifecycle and per-worktree leases
-- [ ] Directed, user-confirmed handoffs
-- [ ] Read-only T3 import and verified independence
+- [x] Historical Phase‑1 resource baseline for the original spatial interface
+- [ ] Publish the current list-first Windows resource rerun: startup, memory, idle CPU, and process-tree totals
+- [ ] Complete Windows validation at 125%, 150%, and 200% scaling with keyboard-only use, NVDA, and Narrator
+- [ ] Ship the review loop: inspect diff, request changes, merge, and record the final commit
+- [ ] Prove the live provider lifecycle: stream, approval/input, interrupt, resume, and fork
+- [ ] Ship signed Windows distribution: install, update/rollback, uninstall, and release-integrity verification
+- [ ] Complete orchestration leases, directed handoffs, and verified T3 import
 - [ ] Terminals, attachments, richer Markdown, and repository surfaces
 
 ## Why public this early?

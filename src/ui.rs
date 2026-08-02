@@ -129,12 +129,19 @@ impl Palette {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct PendingPromptSave {
+    thread_id: Uuid,
+    draft: String,
+}
+
 pub struct AgentWorldApp {
     core: CoreHandle,
     actors: Vec<ThreadActorSnapshot>,
     selected: Option<Uuid>,
     timeline: Vec<TimelineMessage>,
     drafts: HashMap<Uuid, String>,
+    pending_prompt_saves: HashMap<Uuid, PendingPromptSave>,
     status: String,
     status_is_error: bool,
     preserve_status_on_bootstrap: bool,
@@ -156,6 +163,7 @@ impl AgentWorldApp {
             selected: None,
             timeline: vec![],
             drafts: HashMap::new(),
+            pending_prompt_saves: HashMap::new(),
             status: "Loading durable state…".into(),
             status_is_error: false,
             preserve_status_on_bootstrap: false,
@@ -192,6 +200,12 @@ impl AgentWorldApp {
                     }
                 }
                 CoreEvent::Receipt(receipt) => {
+                    reconcile_prompt_receipt(
+                        &mut self.drafts,
+                        &mut self.pending_prompt_saves,
+                        receipt.command_id,
+                        &receipt.status,
+                    );
                     if let Some(sequence) = receipt.event_sequence {
                         self.last_sequence = self.last_sequence.max(sequence);
                     }
@@ -212,6 +226,14 @@ impl AgentWorldApp {
                     );
                     self.preserve_status_on_bootstrap = true;
                     refresh = true;
+                }
+                CoreEvent::CommandError { command_id, error } => {
+                    discard_pending_prompt_save(&mut self.pending_prompt_saves, command_id);
+                    self.persistent_error = Some(error.clone());
+                    self.set_status(
+                        format!("Core needs attention · {}", compact_text(&error, 180)),
+                        true,
+                    );
                 }
                 CoreEvent::Timeline {
                     thread_id,
@@ -278,21 +300,23 @@ impl AgentWorldApp {
             self.set_status("Select an operator before saving a prompt", true);
             return;
         };
-        let Some(text) = self
-            .drafts
-            .get(&thread_id)
-            .map(|draft| draft.trim().to_owned())
-        else {
+        if prompt_save_pending(&self.pending_prompt_saves, thread_id) {
+            self.set_status("A prompt save is already pending for this operator", true);
+            return;
+        }
+        let Some(draft) = self.drafts.get(&thread_id).cloned() else {
             return;
         };
+        let text = draft.trim().to_owned();
         if text.is_empty() {
             self.set_status("Write a prompt before saving it", true);
             return;
         }
         match self.core.command(Command::TurnSend { thread_id, text }) {
-            Ok(()) => {
-                self.drafts.remove(&thread_id);
-                self.set_status("Prompt saved locally; no model turn was started", false);
+            Ok(command_id) => {
+                self.pending_prompt_saves
+                    .insert(command_id, PendingPromptSave { thread_id, draft });
+                self.set_status("Saving prompt to the durable timeline…", false);
             }
             Err(error) => self.set_status(error, true),
         }
@@ -302,7 +326,7 @@ impl AgentWorldApp {
         let Some(actor) = self.selected_actor().cloned() else {
             return;
         };
-        if !is_interruptible(actor.state) {
+        if !actor.state.is_interruptible() {
             self.set_status(
                 format!(
                     "{} is {}; there is no interruptible work",
@@ -316,7 +340,7 @@ impl AgentWorldApp {
         match self.core.command(Command::TurnInterrupt {
             thread_id: actor.thread_id,
         }) {
-            Ok(()) => self.set_status("Interruption request persisted", false),
+            Ok(_) => self.set_status("Interruption request queued", false),
             Err(error) => self.set_status(error, true),
         }
     }
@@ -656,7 +680,7 @@ impl AgentWorldApp {
                     worktree_id: Uuid::new_v4(),
                     thread_id: actor.thread_id,
                 }) {
-                    Ok(()) => self.set_status("Creating and verifying Git worktree…", false),
+                    Ok(_) => self.set_status("Creating and verifying Git worktree…", false),
                     Err(error) => self.set_status(error, true),
                 }
             }
@@ -726,13 +750,19 @@ impl AgentWorldApp {
                 .drafts
                 .get(&actor.thread_id)
                 .is_some_and(|draft| !draft.trim().is_empty());
+            let prompt_pending = prompt_save_pending(&self.pending_prompt_saves, actor.thread_id);
+            let save_label = if prompt_pending {
+                "Saving prompt…"
+            } else {
+                "Save prompt  Ctrl+Enter"
+            };
             if ui
-                .add_enabled(has_draft, egui::Button::new("Save prompt  Ctrl+Enter"))
+                .add_enabled(has_draft && !prompt_pending, egui::Button::new(save_label))
                 .clicked()
             {
                 self.save_prompt();
             }
-            let interruptible = is_interruptible(actor.state);
+            let interruptible = actor.state.is_interruptible();
             let interrupt = ui.add_enabled(
                 interruptible,
                 egui::Button::new("Request interrupt  Ctrl+."),
@@ -955,11 +985,41 @@ fn attention_label(actor: &ThreadActorSnapshot) -> Option<&'static str> {
     }
 }
 
-fn is_interruptible(state: ActorState) -> bool {
-    matches!(
-        state,
-        ActorState::Starting | ActorState::Running | ActorState::AwaitingApproval
-    )
+fn prompt_save_pending(
+    pending_prompt_saves: &HashMap<Uuid, PendingPromptSave>,
+    thread_id: Uuid,
+) -> bool {
+    pending_prompt_saves
+        .values()
+        .any(|pending| pending.thread_id == thread_id)
+}
+
+fn reconcile_prompt_receipt(
+    drafts: &mut HashMap<Uuid, String>,
+    pending_prompt_saves: &mut HashMap<Uuid, PendingPromptSave>,
+    command_id: Uuid,
+    status: &str,
+) {
+    if !matches!(status, "succeeded" | "rejected" | "indeterminate") {
+        return;
+    }
+    let Some(pending) = pending_prompt_saves.remove(&command_id) else {
+        return;
+    };
+    if status == "succeeded"
+        && drafts
+            .get(&pending.thread_id)
+            .is_some_and(|draft| draft == &pending.draft)
+    {
+        drafts.remove(&pending.thread_id);
+    }
+}
+
+fn discard_pending_prompt_save(
+    pending_prompt_saves: &mut HashMap<Uuid, PendingPromptSave>,
+    command_id: Uuid,
+) {
+    pending_prompt_saves.remove(&command_id);
 }
 
 fn shortcut_is_enabled(action: ShortcutAction, widget_focused: bool) -> bool {
@@ -1042,6 +1102,36 @@ mod tests {
         }
     }
 
+    fn app_with_draft(
+        thread_id: Uuid,
+        draft: &str,
+    ) -> (AgentWorldApp, Receiver<CoreInput>, mpsc::Sender<CoreEvent>) {
+        let (input_tx, input_rx) = mpsc::sync_channel(8);
+        let (event_tx, event_rx) = mpsc::channel();
+        (
+            AgentWorldApp {
+                core: CoreHandle {
+                    tx: input_tx,
+                    rx: event_rx,
+                },
+                actors: vec![],
+                selected: Some(thread_id),
+                timeline: vec![],
+                drafts: HashMap::from([(thread_id, draft.to_owned())]),
+                pending_prompt_saves: HashMap::new(),
+                status: String::new(),
+                status_is_error: false,
+                preserve_status_on_bootstrap: false,
+                persistent_error: None,
+                last_sequence: 0,
+                probe_rx: None,
+                probes: vec![],
+            },
+            input_rx,
+            event_tx,
+        )
+    }
+
     #[test]
     fn keymap_preserves_platform_tab_and_declares_required_shortcuts() {
         assert!(!SHORTCUTS.iter().any(|binding| binding.key == Key::Tab));
@@ -1115,9 +1205,142 @@ mod tests {
         assert!(needs_attention(&approval));
         assert!(needs_attention(&unread));
         assert_eq!(attention_label(&unread), Some("UNREAD"));
-        assert!(!is_interruptible(saved.state));
-        assert!(is_interruptible(approval.state));
-        assert!(!is_interruptible(idle.state));
+        assert!(!saved.state.is_interruptible());
+        assert!(approval.state.is_interruptible());
+        assert!(!idle.state.is_interruptible());
+    }
+
+    #[test]
+    fn prompt_draft_clears_only_for_its_matching_succeeded_receipt() {
+        let thread_id = Uuid::new_v4();
+        let command_id = Uuid::new_v4();
+        let unrelated_command_id = Uuid::new_v4();
+        let mut drafts = HashMap::from([(thread_id, "  durable prompt  ".to_owned())]);
+        let pending = PendingPromptSave {
+            thread_id,
+            draft: drafts[&thread_id].clone(),
+        };
+        let mut pending_prompt_saves = HashMap::from([(command_id, pending.clone())]);
+
+        reconcile_prompt_receipt(
+            &mut drafts,
+            &mut pending_prompt_saves,
+            unrelated_command_id,
+            "succeeded",
+        );
+        assert_eq!(drafts[&thread_id], "  durable prompt  ");
+        assert_eq!(pending_prompt_saves.get(&command_id), Some(&pending));
+
+        reconcile_prompt_receipt(
+            &mut drafts,
+            &mut pending_prompt_saves,
+            command_id,
+            "accepted",
+        );
+        assert_eq!(pending_prompt_saves.get(&command_id), Some(&pending));
+
+        reconcile_prompt_receipt(
+            &mut drafts,
+            &mut pending_prompt_saves,
+            command_id,
+            "rejected",
+        );
+        assert_eq!(drafts[&thread_id], "  durable prompt  ");
+        assert!(!pending_prompt_saves.contains_key(&command_id));
+
+        let indeterminate_command_id = Uuid::new_v4();
+        pending_prompt_saves.insert(indeterminate_command_id, pending.clone());
+        reconcile_prompt_receipt(
+            &mut drafts,
+            &mut pending_prompt_saves,
+            indeterminate_command_id,
+            "indeterminate",
+        );
+        assert_eq!(drafts[&thread_id], "  durable prompt  ");
+        assert!(!pending_prompt_saves.contains_key(&indeterminate_command_id));
+
+        let succeeded_command_id = Uuid::new_v4();
+        pending_prompt_saves.insert(succeeded_command_id, pending);
+        reconcile_prompt_receipt(
+            &mut drafts,
+            &mut pending_prompt_saves,
+            succeeded_command_id,
+            "succeeded",
+        );
+        assert!(!drafts.contains_key(&thread_id));
+        assert!(!pending_prompt_saves.contains_key(&succeeded_command_id));
+    }
+
+    #[test]
+    fn succeeded_prompt_receipt_preserves_a_newer_edit() {
+        let thread_id = Uuid::new_v4();
+        let command_id = Uuid::new_v4();
+        let mut drafts = HashMap::from([(thread_id, "newer edit".to_owned())]);
+        let mut pending_prompt_saves = HashMap::from([(
+            command_id,
+            PendingPromptSave {
+                thread_id,
+                draft: "submitted draft".into(),
+            },
+        )]);
+
+        reconcile_prompt_receipt(
+            &mut drafts,
+            &mut pending_prompt_saves,
+            command_id,
+            "succeeded",
+        );
+
+        assert_eq!(drafts[&thread_id], "newer edit");
+        assert!(!pending_prompt_saves.contains_key(&command_id));
+    }
+
+    #[test]
+    fn prompt_save_waits_for_receipt_blocks_duplicates_and_recovers_from_execution_error() {
+        let thread_id = Uuid::new_v4();
+        let (mut app, input_rx, event_tx) = app_with_draft(thread_id, "  retry me  ");
+
+        app.save_prompt();
+        let envelope = match input_rx.try_recv().expect("prompt command queued") {
+            CoreInput::Execute(envelope) => envelope,
+            _ => panic!("prompt save queued a non-command input"),
+        };
+        match &envelope.command {
+            Command::TurnSend {
+                thread_id: queued_thread_id,
+                text,
+            } => {
+                assert_eq!(*queued_thread_id, thread_id);
+                assert_eq!(text, "retry me");
+            }
+            _ => panic!("prompt save queued the wrong command"),
+        }
+        assert_eq!(app.drafts[&thread_id], "  retry me  ");
+        assert!(prompt_save_pending(&app.pending_prompt_saves, thread_id));
+        assert_eq!(
+            app.pending_prompt_saves[&envelope.command_id].draft,
+            "  retry me  "
+        );
+
+        app.save_prompt();
+        assert!(matches!(
+            input_rx.try_recv(),
+            Err(mpsc::TryRecvError::Empty)
+        ));
+
+        event_tx
+            .send(CoreEvent::CommandError {
+                command_id: envelope.command_id,
+                error: "database unavailable".into(),
+            })
+            .expect("send command error");
+        app.poll();
+        assert!(!prompt_save_pending(&app.pending_prompt_saves, thread_id));
+        assert_eq!(app.drafts[&thread_id], "  retry me  ");
+        assert_eq!(
+            app.persistent_error.as_deref(),
+            Some("database unavailable")
+        );
     }
 
     #[test]

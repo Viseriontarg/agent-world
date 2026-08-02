@@ -146,6 +146,13 @@ impl ActorState {
             _ => Self::Idle,
         }
     }
+
+    pub fn is_interruptible(self) -> bool {
+        matches!(
+            self,
+            Self::Starting | Self::Running | Self::AwaitingApproval
+        )
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -255,6 +262,10 @@ pub enum CoreInput {
 pub enum CoreEvent {
     Bootstrap(BootstrapSnapshot),
     Receipt(Receipt),
+    CommandError {
+        command_id: Uuid,
+        error: String,
+    },
     Timeline {
         thread_id: Uuid,
         messages: Vec<TimelineMessage>,
@@ -292,19 +303,24 @@ impl CoreHandle {
                 while let Ok(input) = input_rx.recv() {
                     let event = match input {
                         CoreInput::Execute(envelope) => {
-                            store.execute(envelope).map(CoreEvent::Receipt)
+                            let command_id = envelope.command_id;
+                            store.execute(envelope).map_or_else(
+                                |error| CoreEvent::CommandError { command_id, error },
+                                CoreEvent::Receipt,
+                            )
                         }
-                        CoreInput::Bootstrap => {
-                            store.bootstrap_snapshot().map(CoreEvent::Bootstrap)
-                        }
+                        CoreInput::Bootstrap => store
+                            .bootstrap_snapshot()
+                            .map(CoreEvent::Bootstrap)
+                            .unwrap_or_else(CoreEvent::Error),
                         CoreInput::Timeline { thread_id, limit } => store
                             .timeline_page(thread_id, limit.min(100))
                             .map(|messages| CoreEvent::Timeline {
                                 thread_id,
                                 messages,
-                            }),
-                    }
-                    .unwrap_or_else(CoreEvent::Error);
+                            })
+                            .unwrap_or_else(CoreEvent::Error),
+                    };
                     if event_tx.send(event).is_err() {
                         break;
                     }
@@ -319,9 +335,12 @@ impl CoreHandle {
         })
     }
 
-    pub fn command(&self, command: Command) -> AppResult<()> {
+    pub fn command(&self, command: Command) -> AppResult<Uuid> {
+        let envelope = CommandEnvelope::new(command);
+        let command_id = envelope.command_id;
         self.tx
-            .try_send(CoreInput::Execute(CommandEnvelope::new(command)))
+            .try_send(CoreInput::Execute(envelope))
+            .map(|()| command_id)
             .map_err(err)
     }
 }
@@ -1496,10 +1515,7 @@ fn validate_command(tx: &Transaction<'_>, command: &Command) -> AppResult<()> {
         }
         Command::TurnInterrupt { thread_id } => {
             let state = required_thread_state(tx, *thread_id)?;
-            if !matches!(
-                state.as_str(),
-                "starting" | "running" | "awaiting_approval" | "waiting_user"
-            ) {
+            if !ActorState::parse(&state).is_interruptible() {
                 return Err(format!(
                     "thread {thread_id} cannot be interrupted while {state}"
                 ));
@@ -2483,6 +2499,100 @@ mod tests {
         assert_eq!(event_count, 0);
         assert_eq!(aggregate_count, 0);
         assert_eq!(receipt_count, 5);
+    }
+
+    #[test]
+    fn waiting_user_interrupt_is_a_durable_rejection_without_state_change() {
+        let root = TestRoot::new("waiting-user-interrupt");
+        let source = create_git_fixture(root.path());
+        let db_path = root.path().join("state.sqlite");
+        let mut store = Store::open(db_path, root.path().to_path_buf()).expect("open empty store");
+        let project_id = Uuid::new_v4();
+        let thread_id = Uuid::new_v4();
+        store
+            .execute(CommandEnvelope::new(Command::ProjectCreate {
+                project_id,
+                name: "Waiting user fixture".into(),
+                repo_path: source,
+            }))
+            .expect("create project");
+        store
+            .execute(CommandEnvelope::new(Command::ThreadCreate {
+                thread_id,
+                project_id,
+                provider: Provider::Codex,
+                label: "Prompt saved".into(),
+            }))
+            .expect("create thread");
+        let sent = store
+            .execute(CommandEnvelope::new(Command::TurnSend {
+                thread_id,
+                text: "persist this prompt".into(),
+            }))
+            .expect("save prompt");
+        assert_eq!(sent.status, "succeeded");
+
+        let (state_before, last_sequence_before): (String, i64) = store
+            .conn
+            .query_row(
+                "SELECT state, last_event_sequence FROM threads WHERE thread_id = ?1",
+                [thread_id.to_string()],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("load waiting-user projection");
+        let events_before: i64 = store
+            .conn
+            .query_row("SELECT COUNT(*) FROM events", [], |row| row.get(0))
+            .expect("count events before interrupt");
+        let receipts_before: i64 = store
+            .conn
+            .query_row("SELECT COUNT(*) FROM command_receipts", [], |row| {
+                row.get(0)
+            })
+            .expect("count receipts before interrupt");
+        let version_before =
+            connection_aggregate_version(&store.conn, thread_id).expect("load thread version");
+        assert_eq!(state_before, ActorState::WaitingUser.as_str());
+        assert_eq!(last_sequence_before as u64, sent.event_sequence.unwrap());
+
+        let interrupted = store
+            .execute(CommandEnvelope::new(Command::TurnInterrupt { thread_id }))
+            .expect("durably reject waiting-user interrupt");
+        assert_eq!(interrupted.status, "rejected");
+        assert_eq!(interrupted.event_sequence, None);
+        assert!(
+            interrupted.result["error"]
+                .as_str()
+                .is_some_and(|error| error.contains("cannot be interrupted while waiting_user"))
+        );
+
+        let (state_after, last_sequence_after): (String, i64) = store
+            .conn
+            .query_row(
+                "SELECT state, last_event_sequence FROM threads WHERE thread_id = ?1",
+                [thread_id.to_string()],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("reload waiting-user projection");
+        let events_after: i64 = store
+            .conn
+            .query_row("SELECT COUNT(*) FROM events", [], |row| row.get(0))
+            .expect("count events after interrupt");
+        let receipts_after: i64 = store
+            .conn
+            .query_row("SELECT COUNT(*) FROM command_receipts", [], |row| {
+                row.get(0)
+            })
+            .expect("count receipts after interrupt");
+        assert_eq!(state_after, state_before);
+        assert_eq!(last_sequence_after, last_sequence_before);
+        assert_eq!(events_after, events_before);
+        assert_eq!(receipts_after, receipts_before + 1);
+        assert_eq!(
+            connection_aggregate_version(&store.conn, thread_id)
+                .expect("load unchanged thread version"),
+            version_before
+        );
     }
 
     #[test]
