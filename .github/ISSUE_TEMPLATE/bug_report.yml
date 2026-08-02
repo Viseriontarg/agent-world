@@ -49,7 +49,7 @@ body:
     attributes:
       label: Rust toolchain
       description: Output of `rustc -Vv` (first two lines are enough).
-      placeholder: rustc 1.92.0 (x86_64-pc-windows-msvc)
+      placeholder: rustc 1.95.0 (x86_64-pc-windows-msvc)
     validations:
       required: true
 

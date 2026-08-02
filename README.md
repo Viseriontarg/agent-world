@@ -11,23 +11,11 @@
 
 <p align="center">
   <a href="https://github.com/Viseriontarg/agent-world/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Viseriontarg/agent-world/ci.yml?branch=main&style=for-the-badge&label=ci&labelColor=13202b"></a>
-  <img alt="Phase 1 proven" src="https://img.shields.io/badge/status-Phase_1_proven-36c5a5?style=for-the-badge&labelColor=13202b">
+  <img alt="Working native slice" src="https://img.shields.io/badge/status-working_native_slice-36c5a5?style=for-the-badge&labelColor=13202b">
   <img alt="Windows" src="https://img.shields.io/badge/platform-Windows-0078D4?style=for-the-badge&logo=windows11&logoColor=white&labelColor=13202b">
-  <img alt="Rust 1.92+" src="https://img.shields.io/badge/Rust-1.92%2B-000000?style=for-the-badge&logo=rust&logoColor=white&labelColor=13202b">
+  <img alt="Rust 1.95+" src="https://img.shields.io/badge/Rust-1.95%2B-000000?style=for-the-badge&logo=rust&logoColor=white&labelColor=13202b">
   <a href="LICENSE"><img alt="MIT licence" src="https://img.shields.io/badge/licence-MIT-8b5cf6?style=for-the-badge&labelColor=13202b"></a>
 </p>
-
-<p align="center">
-  <img alt="75.87 MB private memory" src="https://img.shields.io/badge/private_memory-75.87_MB-5cc8ff?style=for-the-badge&labelColor=13202b">
-  <img alt="1.023 s startup" src="https://img.shields.io/badge/startup-1.023_s-5cc8ff?style=for-the-badge&labelColor=13202b">
-  <img alt="0.026% idle CPU" src="https://img.shields.io/badge/idle_CPU-0.026%25-5cc8ff?style=for-the-badge&labelColor=13202b">
-  <img alt="Zero Node processes" src="https://img.shields.io/badge/node_processes-0-5cc8ff?style=for-the-badge&labelColor=13202b">
-</p>
-
-<p align="center">
-  <img src="docs/assets/agent-world-ui.png" alt="Agent World native Windows application showing the operations floor, actors, timeline, prompt, and provider probe" width="100%">
-</p>
-<p align="center"><sub>Actual Phase‑1 release running the 50-actor / 20,000-message fixture. No mock data, no design comp.</sub></p>
 
 <p align="center">
   <a href="#the-idea">Idea</a> ·
@@ -35,6 +23,7 @@
   <a href="#lean-by-measurement">Measurements</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="docs/ARCHITECTURE.md">Architecture</a> ·
+  <a href="docs/build-in-public.html">Posting campaign</a> ·
   <a href="#roadmap">Roadmap</a>
 </p>
 
@@ -49,27 +38,33 @@ Most multi-agent tools make concurrent work feel like managing browser tabs. Age
 - a **thread** is an operator;
 - Codex and Claude are provider capabilities, not the character's identity.
 
-The scene is only a projection. SQLite, command receipts, provider cursors, and Git remain the source of truth.
+The interface is only a projection. SQLite, command receipts, provider cursors, and Git remain the source of truth.
+The shipped interface is list-first: all operators remain reachable in a standard, scrollable,
+keyboard-focusable control while the room/workstation metaphor stays in the domain model.
 
 ## What exists today
 
-This repository is the completed Phase‑1 executable slice—not a mock-up.
+Agent World is a working native executable slice—not a mock-up and not a completed roadmap. The durable core and list-first control surface are implemented; Windows validation, the review loop, live provider turns, and production distribution remain open proof gates.
 
-| ✅ Proven now | ⏳ Deliberately not claimed yet |
+| ✅ Implemented in this repository | ⏳ Not yet proven |
 |---|---|
-| Native `eframe/egui` application using the single `glow` renderer | Live model turns |
-| Top-down `Painter` scene with 50-actor fixture | Approval and user-input round trips |
-| Keyboard selection, prompting, interruption, and AccessKit | Resume/fork context integrity |
-| One SQLite writer with bounded `sync_channel(8/32)` queues | T3 migration |
-| Durable events, projections, receipts, and payload-conflict rejection | Autonomous agent-to-agent loops |
-| Native Git worktree creation with crash reconciliation | Terminal, browser, PR, or remote surfaces |
-| Zero-turn Codex app-server and Claude CLI capability probes | Feature parity with T3 |
+| Native `eframe/egui/glow` application with a scrollable, focusable operator list and AccessKit enabled | Real-Windows validation at 125%, 150%, and 200% scaling with keyboard-only use, NVDA, and Narrator |
+| Standard `Tab`/`Shift+Tab` traversal, F6 attention cycling, and documented shortcut behavior covered by tests | Published keyboard-only and screen-reader task-flow results |
+| One SQLite writer, bounded queues, durable events, receipts, and payload-conflict rejection | Startup, peak private memory, idle CPU, and process-tree rerun for the current list-first executable |
+| Native Git worktree creation with crash reconciliation and conservative conflict handling | In-app diff inspection, request-changes, merge, and final-commit recording |
+| Zero-turn Codex app-server and Claude CLI capability probes | Live stream, approval/input, interrupt, resume, and fork lifecycle proof |
+| Source-build instructions and Windows CI configuration | Signed installer, update/rollback, uninstall, and release-integrity proof |
 
-If the UI says a live provider turn is unavailable, that is intentional. **Agent World does not fake lifecycle proof.**
+A provider surface probe is not a model turn, AccessKit being enabled is not a screen-reader validation result, and the historical resource baseline does not describe the current list-first build.
 
 ## Lean by measurement
 
-Release fixture: 5 projects, 50 visible actors, 20,000 persisted messages, no live provider or terminal.
+> **Measurement status:** the figures below are the published baseline for the original
+> Phase‑1 spatial interface. The current list-first interface has not yet completed its
+> required Windows measurement rerun, so these are historical comparison numbers—not a
+> claim about the current executable.
+
+Baseline fixture: 5 projects, 50 visible actors, 20,000 persisted messages, no live provider or terminal.
 
 | Gate | Result | Limit | |
 |---|---:|---:|:--|
@@ -81,14 +76,16 @@ Release fixture: 5 projects, 50 visible actors, 20,000 persisted messages, no li
 
 The first DX12/wgpu shell measured 366.45 MB and was rejected. The production renderer is `glow`; there is no second renderer to maintain.
 
-> These numbers are not marketing. `scripts/measure.ps1` produces them on your machine, and
-> [an issue template exists specifically for contradicting them](.github/ISSUE_TEMPLATE/measurement_challenge.yml).
+> `scripts/measure.ps1` measures the current executable on your machine. Its next published
+> Windows result will replace this baseline; [measurement challenges remain welcome](.github/ISSUE_TEMPLATE/measurement_challenge.yml).
 
 ## How it works
 
 ```text
 agent-world.exe
 ├─ eframe / egui / glow / AccessKit
+│  ├─ scrollable operator list
+│  └─ selected workspace: timeline · prompt · provider readiness
 ├─ bounded UI → core command queue
 ├─ single orchestration + SQLite writer thread
 │  ├─ durable command receipts and events
@@ -114,7 +111,7 @@ Mismatched Git state becomes `indeterminate`; Agent World does not reset, prune,
 ### Prerequisites
 
 - Windows 11
-- Rust stable MSVC (`rust-version = 1.92`)
+- Rust 1.95+ MSVC (`rust-version = 1.95`)
 - Visual C++ Build Tools and a Windows SDK
 - Git
 - Optional probes: installed `codex` and `claude` CLIs
@@ -136,11 +133,12 @@ Runtime data defaults to `%LOCALAPPDATA%\AgentWorld`.
 
 | Input | Action |
 |---|---|
-| Click or `1`–`9` | Select an operator |
-| `Enter` | Focus the prompt |
-| `Ctrl+Enter` | Persist the selected prompt |
-| `Ctrl+.` | Request interruption |
-| `Tab` | Cycle operators requiring attention |
+| Click or `1`–`9` | Select an operator (`1`–`9` only when no control has focus) |
+| `Enter` | Focus the prompt when no control has focus |
+| `Ctrl+Enter` | Save the selected prompt to the durable timeline |
+| `Ctrl+.` | Request interruption when the selected operator is interruptible |
+| `F6` | Cycle operators requiring attention |
+| `Tab` / `Shift+Tab` | Move keyboard focus through every control and operator |
 
 ## Prove it locally
 
@@ -154,13 +152,16 @@ Runtime data defaults to `%LOCALAPPDATA%\AgentWorld`.
 
 ## Roadmap
 
-- [x] Native scene, bounded queues, SQLite proof, Git worktree proof
+- [x] Native list-first shell with bounded queues and durable SQLite state
+- [x] Conservative Git worktree creation and crash reconciliation
 - [x] Zero-turn Codex and Claude protocol-surface probes
-- [x] Release resource gate under 250 MB / 0.5% CPU
-- [ ] Live provider lifecycle: stream, approve, interrupt, resume, fork
-- [ ] Full orchestration lifecycle and per-worktree leases
-- [ ] Directed, user-confirmed handoffs
-- [ ] Read-only T3 import and verified independence
+- [x] Historical Phase‑1 resource baseline for the original spatial interface
+- [ ] Publish the current list-first Windows resource rerun: startup, memory, idle CPU, and process-tree totals
+- [ ] Complete Windows validation at 125%, 150%, and 200% scaling with keyboard-only use, NVDA, and Narrator
+- [ ] Ship the review loop: inspect diff, request changes, merge, and record the final commit
+- [ ] Prove the live provider lifecycle: stream, approval/input, interrupt, resume, and fork
+- [ ] Ship signed Windows distribution: install, update/rollback, uninstall, and release-integrity verification
+- [ ] Complete orchestration leases, directed handoffs, and verified T3 import
 - [ ] Terminals, attachments, richer Markdown, and repository surfaces
 
 ## Why public this early?
@@ -177,4 +178,4 @@ rule, and what makes a pull request easy to accept. Security reports go through
 
 ## Licence
 
-[MIT](LICENSE) © 2026 Viseriontarg
+[MIT](LICENSE) © 2026 Aminreza Khoshbahar

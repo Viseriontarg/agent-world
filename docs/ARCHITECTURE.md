@@ -11,8 +11,8 @@
 ```mermaid
 flowchart TB
     subgraph UI["UI thread — eframe / egui / glow / AccessKit"]
-        scene["Painter scene<br/>(operations floor)"]
-        panel["Command panel<br/>(timeline · prompt · probe)"]
+        operators["Scrollable operator list<br/>(attention · state · isolation)"]
+        workspace["Selected workspace<br/>(timeline · prompt · provider readiness)"]
     end
 
     subgraph CORE["agent-world-core thread — single SQLite writer"]
@@ -35,21 +35,21 @@ flowchart TB
     UI -->|"sync_channel(8) · CoreInput"| CORE
     CORE -->|"sync_channel(32) · CoreEvent + request_repaint"| UI
     CORE --> DUR
-    panel -.->|"on demand · zero model turns"| PROBE
-    PROBE -.->|"mpsc · polled per frame"| panel
+    workspace -.->|"on demand · zero model turns"| PROBE
+    PROBE -.->|"mpsc · polled per frame"| workspace
 ```
 
 Three kinds of thread exist, and no more:
 
 | Thread | Count | Owns |
 |---|---:|---|
-| UI | 1 | The window, the scene, all `egui` state |
+| UI | 1 | The window, operator list, selected workspace, all `egui` state |
 | `agent-world-core` | 1 | The SQLite connection, Git invocation, projections |
 | Provider probe | 0 or 1, transient | A short-lived child process, then exits |
 
 There is no thread pool, no async runtime, no process per actor, and no Node. Fifty
 visible operators are fifty rows in a table, not fifty processes — which is the whole
-reason the idle CPU figure has a decimal point in front of it.
+reason the historical Phase‑1 idle CPU baseline has a decimal point in front of it.
 
 ---
 
@@ -73,6 +73,14 @@ event. The UI otherwise repaints only while something is genuinely in motion
 (`request_repaint_after(66ms)` while a probe runs or an actor is starting, running, or
 interrupting). Idle means idle.
 
+The UI is list-first and uses standard focusable egui controls. All operators live in a
+vertical `ScrollArea`; focused rows scroll into view, so the 50-operator fixture remains
+reachable at the 900×560 minimum window. `Tab` and `Shift+Tab` stay with platform focus
+traversal, `F6` cycles attention, and unmodified number shortcuts are disabled whenever
+a widget owns focus. The selected workspace has an outer vertical scroll plus bounded
+timeline and provider-result regions, so long paths and diagnostic output cannot make
+the prompt unreachable.
+
 ---
 
 ## 3. Durability model
@@ -82,6 +90,7 @@ a serialized `Command`. The core writes a **receipt** before anything else, and 
 receipt is the unit of idempotency.
 
 ```
+schema_migrations  version PK · applied_at  (mirrored by PRAGMA user_version)
 command_receipts   command_id PK · protocol_version · command_json · status
                    · result_json · event_sequence · recorded_at
 events             sequence PK AUTOINCREMENT · aggregate_id · aggregate_version
@@ -97,6 +106,18 @@ threads            thread_id PK · project_id → projects · worktree_id → wo
 messages           sequence PK → events · thread_id → threads · role · body · occurred_at
 ```
 
+Opening the store is a guarded operation, not `CREATE TABLE IF NOT EXISTS` and hope:
+
+- schema version `0` is migrated transactionally to version `1`, after a consistent
+  `state.sqlite.pre-v1.bak` snapshot is created for a pre-existing database;
+- a database newer than this binary is rejected before backup or journal-mode changes;
+- required columns, `PRAGMA quick_check(1)`, and every row returned by
+  `PRAGMA foreign_key_check` are validated before the core thread starts;
+- legacy projection semantics are also checked: a non-null worktree can belong to at
+  most one thread, and every accepted worktree plan must name the thread's project;
+- the live connection uses WAL journalling, `synchronous=FULL`, a three-second busy
+  timeout, and a bounded WAL autocheckpoint.
+
 Three properties follow from that layout, and `--self-check` asserts all three:
 
 1. **Replay is free.** Re-executing the same `command_id` with the same payload returns
@@ -107,8 +128,12 @@ Three properties follow from that layout, and `--self-check` asserts all three:
 3. **Ordering is enforced by the schema.** `UNIQUE(aggregate_id, aggregate_version)`
    makes a lost update a constraint violation instead of a silent overwrite.
 
-`projects`, `worktrees`, `threads`, and `messages` are **projections**. The scene is a
-projection of a projection. Nothing is ever true only on screen.
+Invalid mutations are durable rejections, not events. A command for a missing or
+archived thread therefore records the failed attempt without inventing an aggregate
+version or changing a projection.
+
+`projects`, `worktrees`, `threads`, and `messages` are **projections**. The interface is
+a projection of a projection. Nothing is ever true only on screen.
 
 ---
 
@@ -126,6 +151,7 @@ sequenceDiagram
     participant Git
 
     UI->>Core: WorktreeCreate { worktree_id, thread_id }
+    Core->>DB: reject attached thread / unresolved plan / reused ID / stale version
     Core->>Git: resolve toplevel, common dir, HEAD commit OID
     Core->>DB: receipt = accepted + immutable worktree_plan
     Note over Core,DB: ← crash window 1
@@ -148,6 +174,16 @@ Verification is exact, not approximate. Four things must match the plan: the res
 toplevel path, the Git common directory, `refs/heads/<branch>`, and the HEAD commit
 OID. If the branch already exists and points somewhere else, Agent World stops with
 `worktree branch X points to Y, expected Z; refusing to reset it`.
+
+Recovery is failure-isolated. One plan that cannot be reconciled becomes a visible
+startup warning while other plans and the application continue. A conflicting legacy
+accepted plan is moved to `indeterminate` before any Git command runs, so it cannot
+retry forever or create an orphan branch/path.
+
+A fresh worktree command is also rejected while its thread already has an accepted
+plan. The rejection names the original command and worktree, is recorded as a receipt
+without another event or aggregate version, and leaves the original durable plan
+available for replay.
 
 **Mismatch becomes `indeterminate`.** It does not `reset --hard`, prune, delete, or
 force. An agent runner that silently repairs your Git state is a tool that will
@@ -197,10 +233,10 @@ deleted rather than optimized. `glow` is the production renderer and there is no
 backend to keep alive, no feature flag to test twice, and no "it works on the other
 path" bug class.
 
-The scene itself is immediate-mode `Painter` output — rectangles, circles, and text, no
-retained scene graph. Hit-testing is one `ui.interact` per station. Selection,
-attention cycling, prompting, and interruption are keyboard-reachable, and AccessKit is
-on.
+The interface uses immediate-mode standard widgets rather than a retained scene graph:
+one focusable button per operator, scroll areas for long collections, and native text
+editing for the prompt. Selection, focus traversal, attention cycling, prompt saving,
+and guarded interruption are keyboard-reachable, and AccessKit is on.
 
 Release profile: `codegen-units = 1`, `lto = "thin"`, `panic = "abort"`, `strip = true`.
 
