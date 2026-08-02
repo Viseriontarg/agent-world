@@ -89,7 +89,7 @@
     .schedule>summary{padding:15px 16px;cursor:pointer;color:var(--muted);font-weight:750}
     .schedule-inner{padding:0 14px 14px}
     .schedule-tools{display:grid;grid-template-columns:1fr 180px;gap:8px}
-    .schedule-list{display:grid;gap:5px;max-height:330px;margin:12px 0 0;padding:0 2px 0 0;overflow:auto;list-style:none}
+    .schedule-list{display:grid;gap:5px;margin:12px 0 0;padding:0 2px 0 0;list-style:none}
     .schedule-item{display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:10px;width:100%;padding:9px 10px;
       border:1px solid transparent;border-radius:8px;background:transparent;text-align:left}
     .schedule-item:hover,.schedule-item[aria-current="true"]{border-color:var(--line);background:var(--panel-2)}
@@ -151,7 +151,7 @@
 
       <details class="more">
         <summary>Context and production details</summary>
-        <div class="more-body">
+        <div class="more-body" hidden>
           <section class="needs" aria-label="What this post needs">
             <div class="need"><b>Asset</b><span id="asset"></span></div>
             <div class="need"><b>Proof</b><label class="proof-row" for="proof"><input id="proof" name="proof" type="checkbox"><span><strong>Verified against the final artifact</strong><span id="gate"></span></span></label></div>
@@ -173,7 +173,7 @@
 
       <details class="schedule">
         <summary>Full 36-post schedule</summary>
-        <div class="schedule-inner">
+        <div class="schedule-inner" hidden>
           <div class="schedule-tools">
             <label><span class="sr-only">Search schedule</span><input type="search" id="search" name="search" placeholder="Search posts"></label>
             <label><span class="sr-only">Filter schedule</span><select id="filter" name="filter"><option value="all">All posts</option><option value="open">Not posted</option><option value="posted">Posted</option><option value="placeholders">Needs fill</option></select></label>
@@ -304,6 +304,13 @@
     ["kicker","title","date","time","position","copy","char-count","copy-state","placeholder-editor","working-copy","working-count",
      "asset","proof","gate","intent","week-miss","fallback","copy-button","posted-button","copy-fallback","reset-copy","status","copy-link",
      "notes","previous","next","jump","search","filter","schedule-list","toast"].forEach(function(id){ el[id] = document.getElementById(id); });
+
+    document.querySelectorAll("details").forEach(function(details){
+      const content=details.querySelector(":scope > div");
+      function syncOptionalContent(){content.hidden=!details.open}
+      details.addEventListener("toggle",syncOptionalContent);
+      syncOptionalContent();
+    });
 
     function escapeHtml(value){
       return String(value).replace(/[&<>'"]/g,function(char){return {"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char]});
