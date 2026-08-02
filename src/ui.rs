@@ -1159,7 +1159,7 @@ mod tests {
 
     #[test]
     fn readme_controls_match_the_registered_ui_contract() {
-        let readme = include_str!("../README.md");
+        let readme = include_str!("../README.md").replace("\r\n", "\n");
         assert!(readme.contains(README_CONTROLS));
         assert!(!readme.contains("| `Tab` | Cycle operators requiring attention |"));
     }
