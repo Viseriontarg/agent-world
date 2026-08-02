@@ -548,7 +548,7 @@ impl AgentWorldApp {
                             .wrap();
                             let response =
                                 ui.add_sized([ui.available_width(), OPERATOR_ROW_HEIGHT], button);
-                            if response.has_focus() {
+                            if response.gained_focus() {
                                 response.scroll_to_me(Some(Align::Center));
                             }
                             if response.clicked() {
