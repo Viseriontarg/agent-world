@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0c1118">
+  <meta name="description" content="Agent World’s 36-post X campaign, presented one next post at a time with its date, exact copy, asset, and proof gate.">
+  <title>Agent World · What to post next</title>
+  <style>
+    :root {
+      --bg:#0c1118; --panel:#121b26; --panel-2:#182433; --line:#2d4055; --line-2:#405a76;
+      --text:#f5f7fb; --muted:#9eb0c5; --faint:#758aa2; --teal:#48b997; --teal-dim:#123d35;
+      --sky:#61cbff; --sky-dim:#123649; --orange:#da8b5b; --amber:#ffbc4a; --amber-dim:#403318;
+      --red:#ff6775; --red-dim:#482027; --radius:16px;
+      font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      color:var(--text); background:var(--bg);
+    }
+    *,*::before,*::after{box-sizing:border-box}
+    html{background:var(--bg);scroll-behavior:smooth}
+    body{margin:0;min-width:0;min-height:100vh;background:
+      radial-gradient(circle at 12% -15%,rgba(72,185,151,.13),transparent 30rem),
+      radial-gradient(circle at 100% 0,rgba(218,139,91,.08),transparent 26rem),var(--bg);color:var(--text)}
+    :where(main,header,footer,nav,section,article,div,form,label,details){min-width:0}
+    :where(p,h1,h2,h3,li,blockquote,span,label,button){overflow-wrap:anywhere}
+    button,input,select,textarea{font:inherit;color:inherit}
+    button,select{cursor:pointer}
+    button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible,summary:focus-visible{
+      outline:3px solid var(--sky);outline-offset:3px}
+    .shell{width:min(860px,100%);margin:0 auto;padding:0 22px 72px}
+    .topbar{display:flex;align-items:center;justify-content:space-between;gap:14px;min-height:62px;border-bottom:1px solid var(--line)}
+    .brand{display:flex;align-items:center;gap:10px;min-width:0;color:var(--text);font-weight:780;text-decoration:none}
+    .mark{display:grid;place-items:center;width:30px;height:30px;flex:0 0 auto;border-radius:9px;background:var(--teal);color:#07130f;font-size:.72rem;font-weight:900}
+    .brand span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .quiet{color:var(--faint);font-size:.78rem}
+    main{padding-top:clamp(44px,8vw,78px)}
+    .kicker{margin:0 0 10px;color:var(--teal);font-size:.74rem;font-weight:850;letter-spacing:.14em;text-transform:uppercase}
+    h1{margin:0;font-size:clamp(2.15rem,7vw,4.7rem);line-height:.96;letter-spacing:-.055em}
+    .date{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:18px 0 0;color:var(--muted)}
+    .dot{color:var(--line-2)}
+    .post{margin-top:26px;overflow:hidden;border:1px solid var(--line-2);border-radius:var(--radius);background:rgba(18,27,38,.94);
+      box-shadow:0 24px 64px rgba(0,0,0,.24)}
+    .post-head{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:15px 18px;border-bottom:1px solid var(--line);background:var(--panel-2)}
+    .post-head strong{font-size:.92rem}
+    .count{color:var(--muted);font-size:.78rem;font-variant-numeric:tabular-nums}
+    .copy{margin:0;padding:clamp(22px,5vw,38px);font-size:clamp(1.14rem,3vw,1.48rem);line-height:1.58;white-space:pre-wrap}
+    .copy-footer{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:12px 18px;border-top:1px solid var(--line);color:var(--faint);font-size:.78rem}
+    .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border:1px solid var(--line);border-radius:999px;background:var(--panel-2)}
+    .pill.warn{border-color:#725b29;background:var(--amber-dim);color:#ffe1a0}
+    .pill.good{border-color:#316f61;background:var(--teal-dim);color:#a9ead8}
+    .primary-actions{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;margin-top:14px}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:48px;padding:10px 16px;border:1px solid var(--line-2);
+      border-radius:11px;background:var(--panel-2);color:var(--text);font-weight:780}
+    .btn:hover{border-color:var(--sky)}
+    .btn:disabled{cursor:not-allowed;opacity:.48;border-color:var(--line);background:var(--panel-2);color:var(--muted)}
+    .btn.primary{border-color:#317665;background:var(--teal-dim);color:#c9fff0}
+    .btn.small{min-height:36px;padding:7px 11px;font-size:.8rem}
+    .btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+    .needs{display:grid;grid-template-columns:1fr;gap:8px;margin-top:16px}
+    .need{display:grid;grid-template-columns:78px minmax(0,1fr);gap:12px;padding:13px 15px;border:1px solid var(--line);border-radius:11px;background:rgba(18,27,38,.7)}
+    .need b{color:var(--faint);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase}
+    .need span{color:var(--muted);font-size:.9rem}
+    .proof-row{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:start;cursor:pointer}
+    .proof-row input{width:19px;height:19px;margin:2px 0 0;accent-color:var(--teal)}
+    .proof-row strong{display:block;color:var(--text);font-size:.84rem}
+    .proof-row span{display:block;margin-top:2px}
+    .placeholder-editor{margin-top:14px;padding:15px;border:1px solid #725b29;border-radius:12px;background:var(--amber-dim)}
+    .placeholder-editor[hidden]{display:none}
+    .placeholder-editor label{display:block;margin-bottom:7px;color:#ffe1a0;font-weight:760;font-size:.82rem}
+    textarea,select,input[type="search"]{width:100%;border:1px solid var(--line-2);border-radius:9px;background:#0b121a}
+    textarea{min-height:138px;padding:12px;resize:vertical;line-height:1.52}
+    select,input[type="search"]{min-height:40px;padding:7px 10px}
+    .editor-meta{display:flex;justify-content:space-between;gap:10px;margin-top:5px;color:#d7c28c;font-size:.72rem}
+    details.more{margin-top:18px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+    details.more>summary{padding:14px 2px;cursor:pointer;color:var(--muted);font-weight:740}
+    .more-body{padding:0 0 16px}
+    .more-body p{margin:0;color:var(--muted);line-height:1.6}
+    .more-body p+p{margin-top:11px}
+    .label{color:var(--faint);font-size:.7rem;font-weight:850;letter-spacing:.1em;text-transform:uppercase}
+    .fallback{padding:13px;border-left:3px solid var(--orange);border-radius:8px;background:#382419;color:#eed6c5}
+    .status-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:15px}
+    .status-row label{display:grid;gap:5px}
+    .private-notes{margin-top:14px}
+    .private-notes textarea{min-height:80px}
+    .nav-row{display:grid;grid-template-columns:1fr minmax(170px,auto) 1fr;gap:10px;margin-top:24px}
+    .nav-row .next{justify-self:stretch}
+    .nav-row .prev{justify-self:stretch}
+    .schedule{margin-top:28px;border:1px solid var(--line);border-radius:12px;background:rgba(18,27,38,.7)}
+    .schedule>summary{padding:15px 16px;cursor:pointer;color:var(--muted);font-weight:750}
+    .schedule-inner{padding:0 14px 14px}
+    .schedule-tools{display:grid;grid-template-columns:1fr 180px;gap:8px}
+    .schedule-list{display:grid;gap:5px;max-height:330px;margin:12px 0 0;padding:0 2px 0 0;overflow:auto;list-style:none}
+    .schedule-item{display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:10px;width:100%;padding:9px 10px;
+      border:1px solid transparent;border-radius:8px;background:transparent;text-align:left}
+    .schedule-item:hover,.schedule-item[aria-current="true"]{border-color:var(--line);background:var(--panel-2)}
+    .schedule-item .num{color:var(--sky);font-weight:800;font-variant-numeric:tabular-nums}
+    .schedule-item .item-copy{min-width:0}
+    .schedule-item .item-copy strong,.schedule-item .item-copy span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .schedule-item .item-copy span{color:var(--faint);font-size:.72rem}
+    .done{color:var(--teal);font-size:.75rem}
+    .footer{margin-top:42px;padding-top:20px;border-top:1px solid var(--line);color:var(--faint);font-size:.76rem;text-align:center}
+    .toast{position:fixed;right:18px;bottom:18px;z-index:20;max-width:min(390px,calc(100vw - 36px));padding:11px 14px;border:1px solid var(--teal);
+      border-radius:9px;background:var(--panel-2);box-shadow:0 16px 46px rgba(0,0,0,.32);opacity:0;transform:translateY(10px);pointer-events:none;transition:.18s}
+    .toast.show{opacity:1;transform:none}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    [hidden]{display:none!important}
+    @media(max-width:620px){
+      .shell{padding-inline:14px}.quiet{display:none}main{padding-top:38px}
+      .primary-actions,.nav-row,.schedule-tools,.status-row{grid-template-columns:1fr}
+      .nav-row select{order:-1}.need{grid-template-columns:1fr;gap:4px}
+      .post-head{align-items:flex-start}.copy{padding:22px 18px}
+    }
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}
+    @media print{.topbar,.primary-actions,.nav-row,.schedule,.status-row,.private-notes,.toast{display:none!important}body{background:#fff;color:#111}.post,.need{box-shadow:none}}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="#post"><span class="mark" aria-hidden="true">AW</span><span>Agent World</span></a>
+      <span class="quiet">36-post build-in-public campaign</span>
+    </header>
+
+    <main id="post">
+      <p class="kicker" id="kicker">Next post</p>
+      <h1 id="title">Loading…</h1>
+      <p class="date"><strong id="date"></strong><span class="dot" aria-hidden="true">•</span><span id="time"></span></p>
+
+      <article class="post" id="post-card">
+        <header class="post-head"><strong>Post copy</strong><span class="count" id="position"></span></header>
+        <blockquote class="copy" id="copy"></blockquote>
+        <footer class="copy-footer"><span id="char-count"></span><span class="pill" id="copy-state"></span></footer>
+      </article>
+
+      <section class="placeholder-editor" id="placeholder-editor" hidden>
+        <label for="working-copy">Fill every bracket from the proof before posting</label>
+        <textarea id="working-copy" name="working-copy"></textarea>
+        <div class="editor-meta"><span id="working-count"></span><span>Saved on this device</span></div>
+      </section>
+
+      <div class="primary-actions">
+        <button class="btn primary" id="copy-button" type="button">Copy post</button>
+        <button class="btn" id="posted-button" type="button">Mark posted</button>
+      </div>
+
+      <nav class="nav-row" aria-label="Move between posts">
+        <button class="btn prev" id="previous" type="button">← Previous</button>
+        <label><span class="sr-only">Jump to a post</span><select id="jump" name="jump"></select></label>
+        <button class="btn next" id="next" type="button">Next →</button>
+      </nav>
+
+      <details class="more">
+        <summary>Context and production details</summary>
+        <div class="more-body">
+          <section class="needs" aria-label="What this post needs">
+            <div class="need"><b>Asset</b><span id="asset"></span></div>
+            <div class="need"><b>Proof</b><label class="proof-row" for="proof"><input id="proof" name="proof" type="checkbox"><span><strong>Verified against the final artifact</strong><span id="gate"></span></span></label></div>
+          </section>
+          <p><span class="label">Why this post</span><br><span id="intent"></span></p>
+          <p><span class="label">If the weekly gate misses</span><br><span id="week-miss"></span></p>
+          <p class="fallback" id="fallback"></p>
+          <div class="primary-actions" style="grid-template-columns:1fr 1fr">
+            <button class="btn small" id="copy-fallback" type="button">Use fallback template</button>
+            <button class="btn small ghost" id="reset-copy" type="button">Reset copy</button>
+          </div>
+          <div class="status-row">
+            <label><span class="label">Publishing status</span><select id="status" name="status"><option>Draft</option><option>Asset ready</option><option>Proof ready</option><option>Scheduled</option><option>Posted</option><option>Held</option></select></label>
+            <label><span class="label">Direct link</span><button class="btn small" id="copy-link" type="button">Copy link to this post</button></label>
+          </div>
+          <label class="private-notes"><span class="label">Private note · saved locally</span><textarea id="notes" name="notes" placeholder="Asset URL or one reminder…"></textarea></label>
+        </div>
+      </details>
+
+      <details class="schedule">
+        <summary>Full 36-post schedule</summary>
+        <div class="schedule-inner">
+          <div class="schedule-tools">
+            <label><span class="sr-only">Search schedule</span><input type="search" id="search" name="search" placeholder="Search posts"></label>
+            <label><span class="sr-only">Filter schedule</span><select id="filter" name="filter"><option value="all">All posts</option><option value="open">Not posted</option><option value="posted">Posted</option><option value="placeholders">Needs fill</option></select></label>
+          </div>
+          <ol class="schedule-list" id="schedule-list"></ol>
+        </div>
+      </details>
+    </main>
+
+    <footer class="footer">Tehran time · Offline, self-contained HTML · Progress and working copy stay in this browser.</footer>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    "use strict";
+    const FALLBACK = "The [gate] missed. [One-sentence reason.] I could hide that behind a smooth demo, but the missing piece is the product. Here is the failing trace and the change I’m making next: [link]";
+    const WEEKS = [
+      {week:1, title:"Truth and positioning", objective:"Correct the market story, publish the honest baseline, and recruit hardware evidence.", proof:"Fix controls, reachability, and public terminology; define reference hardware.", miss:"Publish the failing control or reachability case and remove scale language."},
+      {week:2, title:"Recovery credibility", objective:"Make product failure visible and prove the current Git recovery boundary.", proof:"Record both worktree crash windows and name the execution environment risks.", miss:"Publish the exact crash stage that remains ambiguous."},
+      {week:3, title:"Resource governor v0", objective:"Replace concurrency theater with an explicit admission-control promise.", proof:"Define scheduler states, process-tree accounting, pressure input, and a simulated load harness.", miss:"Publish the pressure behavior that is not safely controllable."},
+      {week:4, title:"Live provider contract", objective:"Separate installed-interface detection from a genuinely proven live lifecycle.", proof:"Normalize events and prove one provider stream with interrupt and durable restart behavior.", miss:"Use the fallback; do not post a provider-logo grid."},
+      {week:5, title:"Approval and attention", objective:"Reduce the time between a worker blocking and a human making an informed decision.", proof:"Normalize approval data, show consequences, raise a Windows notification, and record the decision.", miss:"Show which permission cannot be represented safely."},
+      {week:6, title:"Windows product quality", objective:"Treat reachability, scaling, keyboard behavior, and assistive tech as product features.", proof:"Pass 100–200% DPI, standard Tab behavior, keyboard reachability, list view, and one screen-reader path.", miss:"Publish the failed DPI or accessibility path instead of cosmetic progress."},
+      {week:7, title:"Closed loop", objective:"Prove the only milestone worth charging for: work becomes a reviewed, recorded commit.", proof:"Provider work → diff → request changes → merge → commit link, without terminal rescue.", miss:"No paid offer; post the broken link in the loop."},
+      {week:8, title:"Live hardware matrix", objective:"Measure host overhead and provider impact separately on ordinary machines.", proof:"Run 20 workstreams on 8/16/32 GB profiles with UI latency and low-memory events.", miss:"Reduce hot-worker defaults; never average away a failing machine."},
+      {week:9, title:"Android approval discovery", objective:"Test whether a deliberately tiny companion is useful and safe before building a second app.", proof:"Review the threat model and test a local prototype with five users.", miss:"Keep Android conditional and publish why transport is not safe or useful yet."},
+      {week:10, title:"Distribution and paid readiness", objective:"Make the free/paid boundary explicit and test willingness to pay only after product proof.", proof:"Pass signed install/update/uninstall and onboard 15 design partners.", miss:"Keep testing free; no preorder or scarcity countdown."},
+      {week:11, title:"Evidence and policy", objective:"Correct enterprise language and demonstrate one tamper-evident workstream without compliance theater.", proof:"Record identity, policy, approval, hash chain, tamper detection, and redacted export.", miss:"Remove maturity percentages and publish the missing trust property."},
+      {week:12, title:"Decide the next cycle", objective:"Publish the red column, then choose the next bet from product and buyer evidence.", proof:"Review activation, repeat use, benchmarks, interviews, and paid intent together.", miss:"Extend the design-partner cycle around the weakest evidence; do not launch broadly."}
+    ];
+    const INTENTS = [
+      "Reset the positioning before launch language hardens. This acknowledges a crowded Windows market and names the narrower wedge Agent World can still own.",
+      "Establish measurement credibility early. The row-versus-process caveat prevents a fixture result from becoming an accidental concurrency claim.",
+      "Recruit the first reference-hardware inputs. Replies are valuable only when they include a concrete machine, workload, and failure threshold.",
+      "Show that polish starts with reachability. Naming the current UI failure makes later scale claims falsifiable and earns the right to show the fix.",
+      "Make the durable-core advantage tangible. The raw restart sequence should feel intentionally uneventful and keep every destructive Git action off-screen because none occurred.",
+      "Discover the actual Windows execution surface before locking architecture. Comment stories matter more than the poll winner because they contain edge cases.",
+      "Introduce the product’s resource-bounded promise. The provisional worker range is a hypothesis, not a default until live-provider measurements exist.",
+      "Explain how the promise becomes system behavior. The state model is useful only when provider-supported park/resume semantics are named precisely.",
+      "Expose the scheduler’s central tradeoff to real workloads. Ask respondents to describe what becomes worse under the fewer-hot-workers default.",
+      "Draw a bright line between capability discovery and lifecycle proof. This protects future adapter claims from logo-driven compatibility theater.",
+      "Publish the first live vertical slice only if the capture and event trace agree. The post intentionally keeps approval and resume outside the claim.",
+      "Make compatibility user-visible and test-derived. The matrix should be generated from installed adapter checks so stale marketing cannot enable unsafe controls.",
+      "Reframe the primary information architecture around operator questions. The current room remains evidence of the starting point, not the whole product direction.",
+      "Test the full human-attention path, not merely an approval card. Time from notification to informed decision is the product measurement.",
+      "Collect missing decision context before freezing the approval schema. Label the visual as a mock so research is not mistaken for shipped behavior.",
+      "Define Windows-first quality through failure modes that users actually encounter. The test matrix link turns a platform claim into a maintained contract.",
+      "Show a real DPI and keyboard correction with a checklist. Pairing capture and assertions keeps the before/after from becoming cosmetic evidence.",
+      "Recruit a deliberately small, ordinary-hardware test bench. The ask filters for inconvenient environments rather than testimonial-friendly users.",
+      "Set the commercial product gate publicly. Starting a process is not value; producing a reviewable, attributable commit is.",
+      "Demonstrate the full value loop without edits or hidden recovery. Every bracket must come from the same raw run so duration and machine context remain comparable.",
+      "Learn the human reasons tests are insufficient. Recurring rejection causes should become first-class review affordances, not a generic comments field.",
+      "Correct benchmark accounting before publishing live numbers. Host and provider process trees must remain separate so a light shell cannot hide a heavy workflow.",
+      "Publish a reproducible live-load result. Raw data, machine context, UI latency, and memory pressure are all required; estimates cannot fill the brackets.",
+      "Invite adversarial replication. A safe script and structured contradiction path turn disagreement into a growing support matrix.",
+      "Constrain Android to one job before implementation grows. The post tests whether away-from-desk approval is valuable without promising a remote IDE.",
+      "Lead with the security boundary, not a phone mock. The written threat model must resolve pairing, revocation, nonce expiry, and payload minimization.",
+      "Measure whether the companion solves a meaningful latency problem. Follow up on real approval workflows and respect a clear ‘do not put this on my phone.’",
+      "Declare a principled free/paid boundary. Resource safety and Git recovery are trust infrastructure; recurring cross-device and organizational value can fund the product.",
+      "Test a finite founding offer without manufacturing scarcity. The closed loop and signed installer are prerequisites, and the terms exclude model usage clearly.",
+      "Ask for price criticism only from people who understand the workflow. The useful answer explains the present workaround and what makes the value zero or higher.",
+      "Correct the roadmap’s enterprise maturity language. The event store is a foundation; the checklist identifies the control plane still missing.",
+      "Demonstrate tamper evidence narrowly and reproducibly. The compliance disclaimer prevents a technical proof from becoming an unsupported legal claim.",
+      "Find actual adoption blockers from people operating agent deployments. Qualify roles and deployment context privately rather than collecting broad feature votes.",
+      "Show that public learning changed the pitch. The retrospective should remove every word that the twelve-week evidence did not earn.",
+      "Publish the complete scorecard, especially failures and disabled capabilities. Raw links let readers audit what moved and what did not.",
+      "Close the loop by making one evidence-based product decision. Each bracket must trace to the review, and weak evidence should produce more discovery—not false certainty."
+    ];
+    const POSTS = [
+      {order:1,date:"2026-08-04",time:"17:30",theme:"Market correction",asset:"Plain text + official links in reply",copy:"Windows isn’t an empty market anymore. Codex, Copilot, T3 Code and OpenCode ship there now. Good. That forces a better question: what is still hard? My answer for Agent World: resource limits, recoverable Git state and a local audit trail.",gate:"Ready now; link only to reviewed official sources."},
+      {order:2,date:"2026-08-06",time:"18:30",theme:"Baseline honesty",asset:"Current UI + measurement JSON",copy:"The current Agent World build opens in 1.023s, uses 75.87 MB private memory and idles at 0.026% CPU on a 50-workstream fixture. Important caveat: those are rows, not 50 live agents. I’m not going to blur that line. [measurement link]",gate:"Ready after attaching the existing raw measurement and method."},
+      {order:3,date:"2026-08-08",time:"16:30",theme:"User discovery",asset:"No image",copy:"If you use coding agents on Windows, I want the unglamorous version: RAM, CPU, shell, repo size, and the point where the machine starts fighting you. Reply with those five things. I’m turning the answers into the reference hardware matrix.",gate:"Ready now; log replies with permission."},
+      {order:4,date:"2026-08-11",time:"17:30",theme:"Credibility bug",asset:"Current screenshot annotated at the cutoff",copy:"I found the product’s first credibility bug before adding a model: the screenshot shows 50 operators, but the lower rows are unreachable at the default window size. That is not scale. It is overflow. Fixing the honest version before the impressive version.",gate:"Ready now; use the real screenshot."},
+      {order:5,date:"2026-08-13",time:"18:30",theme:"Crash recovery",asset:"Raw screen recording + self-check JSON",copy:"Today’s demo is deliberately boring: Agent World records a worktree plan, I kill it in the two dangerous windows, and it recovers without resetting or deleting Git state. A tool that edits code should be boring around recovery. [video]",gate:"Record both currently proven crash windows; no jump cuts around restart."},
+      {order:6,date:"2026-08-15",time:"16:30",theme:"Execution environment",asset:"X poll",copy:"Windows users: which setup should Agent World treat as first-class? 1) PowerShell 2) Git Bash 3) WSL 4) all three, selected per project. I have a view, but I want the failure stories before I harden it.",gate:"Ready now; capture comments, not only poll totals."},
+      {order:7,date:"2026-08-18",time:"17:30",theme:"Resource promise",asset:"Simple queue sketch",copy:"The promise is no longer ‘run 20 agents at once.’ On a 16 GB laptop, that is usually a way to turn work into paging. The promise I’m testing is: keep 20 workstreams visible, admit 2–4 safely, and park or queue the rest without losing context.",gate:"Ready as a product hypothesis; label 2–4 as provisional."},
+      {order:8,date:"2026-08-20",time:"18:30",theme:"Scheduler architecture",asset:"State diagram",copy:"Sketching Agent World’s scheduler: queued → admitted → running → waiting for you → parked/completed. Windows Job Objects account for each process tree; memory-pressure signals decide when no more work starts. The hard part is safe resume, not drawing the queue. [diagram]",gate:"Publish after the ADR names which states are provider-supported."},
+      {order:9,date:"2026-08-22",time:"16:30",theme:"Scheduling tradeoff",asset:"No image",copy:"Would you rather the app finish fewer tasks sooner, or keep more tasks making slow progress? I’m leaning toward fewer hot workers by default, with a visible manual override. Tell me what workload makes that wrong.",gate:"Ready now; turn concrete workloads into test cases."},
+      {order:10,date:"2026-08-25",time:"17:30",theme:"Provider proof boundary",asset:"Probe output",copy:"Agent World can probe the installed Codex and Claude interfaces without spending a model turn. It still cannot claim a live lifecycle. Next gate is one real turn with stream, interrupt, approval and crash recovery all recorded. Anything less stays labeled a spike.",gate:"Ready now with current probe output."},
+      {order:11,date:"2026-08-27",time:"18:30",theme:"First live turn",asset:"Raw live capture + event trace",copy:"One live [Codex/Claude] turn now streams into the durable timeline. I interrupted it mid-response, restarted Agent World, and the recorded events still line up. Approval and resume are not proven yet, so they remain disabled. [video]",gate:"Publish only if every stated step passes; otherwise use the exact missed-gate fallback."},
+      {order:12,date:"2026-08-29",time:"16:30",theme:"Capability truth",asset:"Capability matrix screenshot",copy:"Provider support will be capability-based, not a row of logos. If an installed version cannot prove interrupt or approval, Agent World should say exactly that and disable the control. Quietly pretending compatibility is worse than supporting one provider well.",gate:"Ready after the matrix is generated from adapter checks, not hand-edited."},
+      {order:13,date:"2026-09-01",time:"17:30",theme:"Core UI job",asset:"List-view wireframe beside current room",copy:"The main screen is not a room full of tiny people. The main job is answering three questions fast: what is running, who needs me, and what changed? The spatial view can stay, but the serious list view now gets equal priority.",gate:"Ready as product direction; show current UI honestly."},
+      {order:14,date:"2026-09-03",time:"18:30",theme:"Approval attention path",asset:"Minimized-window video",copy:"Prototype test: the app is minimized, one worker asks to run a command, Windows raises a toast, and one key takes me to the exact approval with repo, command and consequence visible. If that path is slow, parallel agents are just parallel waiting. [video]",gate:"Publish only after the whole path is runnable; otherwise post the missed gate."},
+      {order:15,date:"2026-09-05",time:"16:30",theme:"Approval discovery",asset:"Approval-card mock or checklist",copy:"Approval UI question: what do you need before allowing a command? I have repo, working directory, exact command, network access, files touched, and whether the choice is one-time or scoped. What is missing?",gate:"Ready as research; do not imply the card is shipped."},
+      {order:16,date:"2026-09-08",time:"17:30",theme:"Windows quality",asset:"DPI/accessibility test grid",copy:"A Windows-first app has to survive 125%, 150% and 200% scaling, mixed monitors, Narrator/NVDA, long paths and antivirus locks. Mica is nice. Those are the actual platform features.",gate:"Ready now; link to the published test matrix when it exists."},
+      {order:17,date:"2026-09-10",time:"18:30",theme:"DPI proof",asset:"Before/after screen capture + checklist",copy:"Before/after from the 150% DPI pass. Same task, no clipped controls, every actor reachable, and Tab behaves like Tab again. I’m publishing the capture next to the checklist because a screenshot alone proves very little. [video + checklist]",gate:"Publish only after all stated checks pass; otherwise use the failed path as the post."},
+      {order:18,date:"2026-09-12",time:"16:30",theme:"Tester recruitment",asset:"Small test-bench card",copy:"I need five people with ordinary Windows laptops for a rough test. Not review quotes. I want broken scaling, slow startup, weird Git paths and bad antivirus interactions. If that sounds useful, reply ‘test bench’ plus RAM and Windows version.",gate:"Ready when onboarding instructions and consent are prepared."},
+      {order:19,date:"2026-09-15",time:"17:30",theme:"Closed-loop definition",asset:"Five-step flow",copy:"The milestone that matters is not ‘agent started.’ It is prompt → work → review diff → merge → recorded commit, without opening another tool. Agent World does not have a product until that loop is boring.",gate:"Ready now as the product gate."},
+      {order:20,date:"2026-09-17",time:"18:30",theme:"Closed-loop proof",asset:"Uncut 60–90 second video",copy:"First closed loop: [provider] changed [small task], I reviewed the diff, requested one correction, merged it, and the final commit OID is linked to the turn. [duration] end to end on [machine]. Raw capture, no jump cuts: [video]",gate:"Publish only when the full loop passes; fill every bracket from the raw run."},
+      {order:21,date:"2026-09-19",time:"16:30",theme:"Review quality",asset:"No image",copy:"What makes you reject an agent’s diff even when the tests pass? I’m collecting the human reasons the UI needs to surface: scope creep, weird dependencies, unreadable code, risky migrations, or something else.",gate:"Ready now; turn recurring reasons into review affordances."},
+      {order:22,date:"2026-09-22",time:"17:30",theme:"Benchmark method",asset:"Host vs provider process diagram",copy:"New benchmark rule: publish host overhead and total system impact separately. A 90 MB UI sitting beside four 700 MB provider trees is not a 90 MB workflow. Both numbers matter.",gate:"Ready as method; numbers are illustrative until replaced by the measured run."},
+      {order:23,date:"2026-09-24",time:"18:30",theme:"Live resource proof",asset:"Raw JSON + resource graph",copy:"Reference run on [CPU / RAM]: 20 workstreams, [N] live workers, [N] queued. Agent World host: [MB]. Provider trees: [MB]. p95 UI input: [ms]. Low-memory events: [N]. Script and raw JSON: [link]",gate:"Publish only with reproducible raw output; never fill brackets from estimates."},
+      {order:24,date:"2026-09-26",time:"16:30",theme:"Measurement challenge",asset:"Issue-template screenshot",copy:"If you run the benchmark and beat or break my numbers, I’ll add the machine to the public matrix. Contradictions are more useful than applause. Here is the exact script and issue template: [link]",gate:"Ready after the live benchmark script is safe for external machines."},
+      {order:25,date:"2026-09-29",time:"17:30",theme:"Android scope",asset:"One-screen companion sketch",copy:"The Android idea is getting smaller, which is good. Not a second IDE. Not remote shell access. One secure job: tell me an agent is blocked, show the exact approval, let me allow or deny, and leave a record.",gate:"Ready as scope; state that no companion is shipped."},
+      {order:26,date:"2026-10-01",time:"18:30",theme:"Companion security",asset:"Threat-model diagram",copy:"Companion threat model before UI: QR pairing, local network by default, mutually authenticated transport, revocable device, expiring approval nonce, and no source payload unless the user asks for it. If this cannot be boringly safe, it should not ship.",gate:"Publish after a written threat model review, not a visual mock."},
+      {order:27,date:"2026-10-03",time:"16:30",theme:"Approval-latency discovery",asset:"X poll",copy:"When an agent asks for approval and you are away from the desk, what is an acceptable delay? 30 seconds, 5 minutes, 30 minutes, or ‘I do not want phone approvals at all.’ This decides whether the companion is a product or a distraction.",gate:"Ready now; follow up with people who describe a real workflow."},
+      {order:28,date:"2026-10-06",time:"17:30",theme:"Pricing principle",asset:"Free vs paid boundary card",copy:"I don’t want to charge for the fact that your laptop has less RAM. The resource governor and safe Git recovery should be part of the free core. Paid value should be ongoing: cross-device approvals, automation, policy, history and support.",gate:"Ready as declared pricing principle."},
+      {order:29,date:"2026-10-08",time:"18:30",theme:"Paid-beta terms",asset:"Plain terms card",copy:"Proposed paid beta: 50 Founding Operator seats, $79 for one year, only after the closed loop and signed installer pass. No lifetime deal. No model usage included. If that is not worth paying for, I want to learn before inventing an enterprise deck.",gate:"Publish only after closed loop and installer gates; until then frame it as a proposal, not checkout."},
+      {order:30,date:"2026-10-10",time:"16:30",theme:"Willingness to pay",asset:"No image",copy:"Pricing sanity check for people who already pay for a model: would a local Windows control layer be worth $8/month if it saved stalled approvals and kept agent work recoverable? ‘No’ is useful. Tell me what would make it worth zero or worth more.",gate:"Ready after respondents have seen or used the loop; do not survey a cold audience only."},
+      {order:31,date:"2026-10-13",time:"17:30",theme:"Enterprise honesty",asset:"Ledger gap checklist",copy:"An audit log is not an enterprise product by itself. It needs identity, policy version, retention, redaction, tamper evidence, export verification and a clear security boundary. The current event store is a base, not ‘80% done.’",gate:"Ready now; update roadmap wording first."},
+      {order:32,date:"2026-10-15",time:"18:30",theme:"Tamper evidence",asset:"Tamper demo + verifier output",copy:"I mapped one completed workstream from prompt to approval to tool call to diff to commit. Every row has an actor, time, scope and outcome; mutate one and verification fails. This is a demo of evidence, not an EU AI Act compliance claim. [video]",gate:"Publish only after the verifier catches a real mutation; retain the compliance disclaimer."},
+      {order:33,date:"2026-10-17",time:"16:30",theme:"Enterprise discovery",asset:"No image",copy:"If your team governs coding agents, what actually blocks adoption: source leaving the machine, unapproved commands, missing audit history, provider sprawl, procurement, or something else? I’m looking for operators, not hypothetical feature votes.",gate:"Ready now; qualify role and actual deployment context privately."},
+      {order:34,date:"2026-10-20",time:"17:30",theme:"Positioning retrospective",asset:"Then vs now card",copy:"Twelve weeks ago the pitch was ‘Windows is ignored.’ That was too broad and already becoming false. The sharper product is: coding-agent workstreams on Windows, admitted within a real machine budget, recoverable in Git, and accountable afterward.",gate:"Ready after the twelve-week evidence review; keep any unproven word out."},
+      {order:35,date:"2026-10-22",time:"18:30",theme:"Public ledger",asset:"Twelve-week scorecard",copy:"Here is the 12-week ledger: what shipped, what failed, benchmark changes, user corrections, and the capabilities still disabled. The useful part is the red column. [public review]",gate:"Publish the full red/failed column and raw links."},
+      {order:36,date:"2026-10-24",time:"16:30",theme:"Next-cycle decision",asset:"One-page decision note",copy:"Next cycle is decided by evidence: [top validated pain], [activation result], [paid-beta signal]. I’m building [next bet] and dropping [deprioritized item]. If you want to test the next build on ordinary Windows hardware, the small cohort is here: [link]",gate:"Fill only after the review; if evidence is weak, say so and extend discovery."}
+    ].map((post, index) => ({...post, week: Math.floor(index / 3) + 1, intent: INTENTS[index]}));
+    const POST_ZERO = {
+      order:0,
+      date:null,
+      time:"Keep pinned during the campaign",
+      theme:"Pinned introduction",
+      asset:"One live status-page link",
+      copy:"I’m building Agent World: a lightweight, local-first control room for coding agents on Windows. The goal isn’t 20 hot processes. It’s 20 visible workstreams, only as many running as the machine can carry, with every approval and Git change recorded. Early and public: [link]",
+      gate:"Replace [link] with one live page showing current status, the latest signed or source build, the raw benchmark, what does not work, and the Windows test-bench form. The canonical draft is already 274 characters with [link], so shorten the final linked copy until it fits X.",
+      week:0,
+      intent:"This is the profile’s pinned introduction. It states the resource-bounded workstream promise before the dated campaign begins.",
+      miss:"Do not pin Post 0 until [link] resolves to the honest status page described above."
+    };
+    const ALL_POSTS = [POST_ZERO].concat(POSTS);
+
+    const STORAGE_KEY = "agent-world-build-in-public-v1";
+    const COMPAT_STORAGE_KEY = "agent-world-build-in-public-v2";
+    const STATUS = ["Draft","Asset ready","Proof ready","Scheduled","Posted","Held"];
+    let state = loadState();
+    let selected = initialSelection();
+
+    const el = {};
+    ["kicker","title","date","time","position","copy","char-count","copy-state","placeholder-editor","working-copy","working-count",
+     "asset","proof","gate","intent","week-miss","fallback","copy-button","posted-button","copy-fallback","reset-copy","status","copy-link",
+     "notes","previous","next","jump","search","filter","schedule-list","toast"].forEach(function(id){ el[id] = document.getElementById(id); });
+
+    function escapeHtml(value){
+      return String(value).replace(/[&<>'"]/g,function(char){return {"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char]});
+    }
+    function readStoredState(key){try{return JSON.parse(localStorage.getItem(key))||{}}catch(_){return {}}}
+    function loadState(){
+      const v1=readStoredState(STORAGE_KEY),v2=readStoredState(COMPAT_STORAGE_KEY),merged={};
+      new Set(Object.keys(v1).concat(Object.keys(v2))).forEach(function(key){
+        const older=v1[key]&&typeof v1[key]==="object"?v1[key]:{};
+        const newer=v2[key]&&typeof v2[key]==="object"?v2[key]:{};
+        const post=ALL_POSTS[Number(key)],canonical=post?post.copy:"";
+        merged[key]={
+          status:newer.status&&newer.status!=="Draft"?newer.status:(older.status||"Draft"),
+          proof:Boolean(older.proof||newer.proof),
+          workingCopy:typeof newer.workingCopy==="string"&&newer.workingCopy!==canonical?newer.workingCopy:(typeof older.workingCopy==="string"?older.workingCopy:canonical),
+          notes:typeof newer.notes==="string"&&newer.notes?newer.notes:(typeof older.notes==="string"?older.notes:"")
+        };
+      });
+      try{
+        if(localStorage.getItem(COMPAT_STORAGE_KEY)!==null){
+          localStorage.setItem(STORAGE_KEY,JSON.stringify(merged));
+          localStorage.removeItem(COMPAT_STORAGE_KEY);
+        }
+      }catch(_){}
+      return merged;
+    }
+    function saveState(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state))}catch(_){notify("Progress could not be saved.",true)}}
+    function currentState(order){
+      const key=String(order); const post=ALL_POSTS[order];
+      const item=state[key]&&typeof state[key]==="object"?state[key]:(state[key]={});
+      if(!STATUS.includes(item.status))item.status="Draft";
+      if(typeof item.proof!=="boolean")item.proof=false;
+      if(typeof item.workingCopy!=="string")item.workingCopy=post.copy;
+      if(typeof item.notes!=="string")item.notes="";
+      return item;
+    }
+    function placeholders(text){return Array.from(String(text).matchAll(/\[[^\]]+\]/g),function(match){return match[0]})}
+    function initialSelection(){
+      const hash=location.hash.match(/^#post-(\d{2})$/);
+      if(hash){const order=Number(hash[1]);if(order>=0&&order<=POSTS.length)return order}
+      const open=ALL_POSTS.findIndex(function(post){return currentState(post.order).status!=="Posted"});
+      return open===-1?ALL_POSTS.length-1:open;
+    }
+    function prettyDate(date){
+      return new Intl.DateTimeFormat("en",{weekday:"long",month:"long",day:"numeric",year:"numeric",timeZone:"Asia/Tehran"}).format(new Date(date+"T12:00:00+03:30"));
+    }
+    function notify(message,danger){
+      el.toast.textContent=message;el.toast.style.borderColor=danger?"var(--red)":"var(--teal)";el.toast.classList.add("show");
+      clearTimeout(notify.timer);notify.timer=setTimeout(function(){el.toast.classList.remove("show")},2400);
+    }
+    async function copyText(text,message){
+      try{await navigator.clipboard.writeText(text)}
+      catch(_){const area=document.createElement("textarea");area.value=text;area.readOnly=true;area.style.position="fixed";area.style.opacity="0";document.body.append(area);area.select();document.execCommand("copy");area.remove()}
+      notify(message||"Copied");
+    }
+    function publishIssues(post,item){
+      const issues=[];
+      if(!item.proof)issues.push("proof is not checked");
+      if(placeholders(item.workingCopy).length)issues.push("brackets remain");
+      if(item.workingCopy.length>280)issues.push("copy is over 280 characters");
+      if(!item.workingCopy.trim())issues.push("copy is empty");
+      return issues;
+    }
+    function updateReadiness(post,item){
+      const tokens=placeholders(item.workingCopy),issues=publishIssues(post,item);
+      let label="Ready to copy";
+      if(tokens.length)label=tokens.length+" bracket"+(tokens.length===1?"":"s")+" to fill";
+      else if(!item.proof)label="Proof required";
+      else if(!item.workingCopy.trim())label="Copy is empty";
+      else if(item.workingCopy.length>280)label="Over 280 characters";
+      el["copy-state"].textContent=label;
+      el["copy-state"].className="pill "+(issues.length?"warn":"good");
+      el["copy-button"].disabled=false;
+      el["copy-button"].title=issues.length?"Copy this draft. Publishing remains blocked: "+issues.join(", "):"Copy this verified post";
+    }
+    function setStatus(next){
+      const post=ALL_POSTS[selected],item=currentState(post.order);
+      if(next==="Scheduled"||next==="Posted"){
+        const issues=publishIssues(post,item);
+        if(issues.length){el.status.value=item.status;notify("Post "+post.order+" blocked: "+issues.join(", ")+".",true);return false}
+      }
+      item.status=next;saveState();render();return true;
+    }
+    function render(){
+      const post=ALL_POSTS[selected],item=currentState(post.order),tokens=placeholders(item.workingCopy),week=post.order===0?null:WEEKS[post.week-1];
+      const firstOpen=ALL_POSTS.findIndex(function(candidate){return currentState(candidate.order).status!=="Posted"});
+      el.kicker.textContent=post.order===0?"Post 0 · Pin this":(selected===firstOpen?"Next post":"Campaign post");
+      el.title.textContent=post.theme;
+      el.date.textContent=post.order===0?"Set up before Post 01":prettyDate(post.date);
+      el.time.textContent=post.order===0?post.time:post.time+" Tehran (UTC+3:30)";
+      el.position.textContent=post.order===0?"Post 0 · Pin this":"Post "+post.order+" of "+POSTS.length+" · Week "+post.week;
+      el.copy.textContent=item.workingCopy;
+      el["char-count"].textContent=item.workingCopy.length+"/280 characters";
+      el["placeholder-editor"].hidden=tokens.length===0;
+      el["working-copy"].value=item.workingCopy;
+      el["working-count"].textContent=item.workingCopy.length+"/280";
+      el.asset.textContent=post.asset;
+      el.proof.checked=item.proof;
+      el.gate.textContent=post.gate;
+      el.intent.textContent=post.intent;
+      el["week-miss"].textContent=post.order===0?post.miss:week.miss;
+      el.fallback.textContent=post.order===0?post.miss:FALLBACK;
+      el["copy-fallback"].hidden=post.order===0;
+      el.status.value=item.status;
+      el.notes.value=item.notes;
+      el["posted-button"].textContent=post.order===0?(item.status==="Posted"?"Pinned ✓":"Mark pinned"):(item.status==="Posted"?"Posted ✓":"Mark posted");
+      el["posted-button"].className="btn "+(item.status==="Posted"?"primary":"");
+      el.previous.disabled=selected===0;
+      el.next.disabled=selected===ALL_POSTS.length-1;
+      el.jump.value=String(post.order);
+      history.replaceState(null,"","#post-"+String(post.order).padStart(2,"0"));
+      updateReadiness(post,item);
+      renderSchedule();
+    }
+    function renderSchedule(){
+      const query=el.search.value.trim().toLowerCase(),filter=el.filter.value;
+      const rows=POSTS.filter(function(post){
+        const item=currentState(post.order);
+        const matches=!query||[post.theme,post.copy,post.asset,post.gate,post.intent].join(" ").toLowerCase().includes(query);
+        const statusMatch=filter==="all"||(filter==="open"&&item.status!=="Posted")||(filter==="posted"&&item.status==="Posted")||(filter==="placeholders"&&placeholders(item.workingCopy).length);
+        return matches&&statusMatch;
+      });
+      el["schedule-list"].innerHTML=rows.map(function(post){
+        const item=currentState(post.order);
+        return '<li><button type="button" class="schedule-item" data-order="'+post.order+'" aria-current="'+(post.order===ALL_POSTS[selected].order?'true':'false')+'">'+
+          '<span class="num">'+String(post.order).padStart(2,"0")+'</span><span class="item-copy"><strong>'+escapeHtml(post.theme)+'</strong><span>'+escapeHtml(post.date+" · "+post.time+" Tehran")+'</span></span>'+
+          (item.status==="Posted"?'<span class="done">Posted</span>':'<span></span>')+'</button></li>';
+      }).join("");
+    }
+    function selectIndex(index){
+      selected=Math.max(0,Math.min(ALL_POSTS.length-1,index));render();document.getElementById("post").scrollIntoView({behavior:"smooth"});
+    }
+
+    el.jump.insertAdjacentHTML("beforeend",'<option value="0">00 · Pin this first</option>');
+    POSTS.forEach(function(post){el.jump.insertAdjacentHTML("beforeend",'<option value="'+post.order+'">'+String(post.order).padStart(2,"0")+' · '+escapeHtml(post.theme)+'</option>')});
+    el["copy-button"].addEventListener("click",function(){
+      const post=ALL_POSTS[selected],item=currentState(post.order),issues=publishIssues(post,item);
+      copyText(item.workingCopy,issues.length?"Draft copied — publishing gate is still open":"Post copied");
+    });
+    el["posted-button"].addEventListener("click",function(){
+      const item=currentState(ALL_POSTS[selected].order);
+      if(item.status==="Posted"){item.status="Draft";saveState();render();return}
+      if(setStatus("Posted")){const nextOpen=ALL_POSTS.findIndex(function(post){return currentState(post.order).status!=="Posted"});if(nextOpen>=0)selectIndex(nextOpen)}
+    });
+    el.proof.addEventListener("change",function(){const post=ALL_POSTS[selected],item=currentState(post.order);item.proof=el.proof.checked;saveState();updateReadiness(post,item)});
+    el["working-copy"].addEventListener("input",function(){
+      const item=currentState(ALL_POSTS[selected].order);item.workingCopy=el["working-copy"].value;saveState();
+      el.copy.textContent=item.workingCopy;el["working-count"].textContent=item.workingCopy.length+"/280";el["char-count"].textContent=item.workingCopy.length+"/280 characters";
+      updateReadiness(ALL_POSTS[selected],item);
+    });
+    el.status.addEventListener("change",function(){setStatus(el.status.value)});
+    el.notes.addEventListener("input",function(){currentState(ALL_POSTS[selected].order).notes=el.notes.value;saveState()});
+    el.previous.addEventListener("click",function(){selectIndex(selected-1)});
+    el.next.addEventListener("click",function(){selectIndex(selected+1)});
+    el.jump.addEventListener("change",function(){selectIndex(Number(el.jump.value))});
+    el.search.addEventListener("input",renderSchedule);
+    el.filter.addEventListener("change",renderSchedule);
+    el["schedule-list"].addEventListener("click",function(event){const button=event.target.closest("[data-order]");if(button)selectIndex(Number(button.dataset.order))});
+    el["copy-fallback"].addEventListener("click",function(){
+      const item=currentState(ALL_POSTS[selected].order);item.workingCopy=FALLBACK;saveState();render();notify("Fallback template loaded. Fill every bracket before posting.")
+    });
+    el["reset-copy"].addEventListener("click",function(){
+      const post=ALL_POSTS[selected],item=currentState(post.order);
+      if(confirm("Reset this working copy to the canonical post?")){item.workingCopy=post.copy;saveState();render();notify("Copy reset")}
+    });
+    el["copy-link"].addEventListener("click",function(){copyText(location.href.split("#")[0]+"#post-"+String(ALL_POSTS[selected].order).padStart(2,"0"),"Direct link copied")});
+    window.addEventListener("hashchange",function(){const match=location.hash.match(/^#post-(\d{2})$/);if(match){const index=Number(match[1]);if(index>=0&&index<ALL_POSTS.length&&index!==selected){selected=index;render()}}});
+    render();
+  </script>
+</body>
+</html>
