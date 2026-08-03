@@ -155,6 +155,12 @@ Runtime data defaults to `%LOCALAPPDATA%\AgentWorld`.
 > The bundled SQLite compiles from source, so `cl.exe` must be on `PATH`. Build from a
 > **Developer PowerShell for VS**, or run `vcvars64.bat` first.
 
+## Releases
+
+Preview builds are published on the [GitHub Releases](https://github.com/Viseriontarg/agent-world/releases) page. Every release is tied to an immutable version tag and includes an unsigned Windows x86-64 portable ZIP, its SHA-256 checksum, and the automated self-check evidence produced from that exact commit.
+
+The repository currently permits prereleases such as `v0.1.0-alpha.1` only. Stable releases remain blocked until Windows signing, installer/update/rollback, and the outstanding manual evidence gates are complete. See [`docs/RELEASING.md`](docs/RELEASING.md) for the versioning and publication procedure.
+
 ### Controls
 
 | Input | Action |

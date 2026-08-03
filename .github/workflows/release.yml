@@ -1,0 +1,167 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  windows-release:
+    name: verify · package · publish prerelease
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust 1.95.0 (MSRV)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.95.0
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Validate tag and Cargo version
+        id: version
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $tag = $env:RELEASE_TAG
+          if ($tag -notmatch '^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
+            throw "Release tag '$tag' is not a supported semantic version tag"
+          }
+
+          $metadata = cargo metadata --locked --no-deps --format-version 1 | ConvertFrom-Json
+          $package = $metadata.packages | Where-Object { $_.name -eq 'agent-world' } | Select-Object -First 1
+          if ($null -eq $package) {
+            throw 'Cargo metadata did not contain the agent-world package'
+          }
+
+          $expectedTag = "v$($package.version)"
+          if ($tag -ne $expectedTag) {
+            throw "Release tag '$tag' does not match Cargo version '$($package.version)'"
+          }
+          if ($package.version -notmatch '-') {
+            throw 'Stable releases are blocked until the signed Windows distribution gate is complete'
+          }
+
+          "version=$($package.version)" >> $env:GITHUB_OUTPUT
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: Build release
+        run: cargo build --release --locked
+
+      - name: Test
+        run: cargo test --release --locked -- --skip installed_provider_surfaces_are_probeable_without_a_turn
+
+      - name: Durable core self-check
+        shell: pwsh
+        run: |
+          $json = (./target/release/agent-world.exe --self-check | Out-String)
+          if ($LASTEXITCODE -ne 0) {
+            throw "self-check exited with $LASTEXITCODE"
+          }
+          $json | ConvertFrom-Json | Out-Null
+          $json | Set-Content -Encoding utf8 "$env:RUNNER_TEMP/self-check.json"
+
+      - name: Live-slice automated evidence
+        shell: pwsh
+        run: |
+          $json = (./target/release/agent-world.exe --live-slice-self-check | Out-String)
+          if ($LASTEXITCODE -ne 0) {
+            throw "live-slice self-check exited with $LASTEXITCODE"
+          }
+          $evidence = $json | ConvertFrom-Json
+          if (-not $evidence.automated_checks_passed) {
+            throw 'deterministic live-slice checks did not pass'
+          }
+          $json | Set-Content -Encoding utf8 "$env:RUNNER_TEMP/live-slice-evidence.json"
+
+      - name: Package Windows preview
+        id: package
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $baseName = "agent-world-$env:VERSION-windows-x86_64-unsigned"
+          $stage = Join-Path $env:RUNNER_TEMP $baseName
+          $archive = Join-Path $env:RUNNER_TEMP "$baseName.zip"
+          $checksum = "$archive.sha256"
+
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          Copy-Item './target/release/agent-world.exe' $stage
+          Copy-Item './README.md' $stage
+          Copy-Item './LICENSE' $stage
+          Compress-Archive -Path "$stage/*" -DestinationPath $archive -CompressionLevel Optimal
+
+          $hash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+          "$hash  $(Split-Path $archive -Leaf)" | Set-Content -Encoding ascii $checksum
+
+          "archive=$archive" >> $env:GITHUB_OUTPUT
+          "checksum=$checksum" >> $env:GITHUB_OUTPUT
+
+      - name: Retain release candidate artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-world-${{ steps.version.outputs.version }}-release-candidate
+          path: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.package.outputs.checksum }}
+            ${{ runner.temp }}/self-check.json
+            ${{ runner.temp }}/live-slice-evidence.json
+          if-no-files-found: error
+
+      - name: Publish GitHub prerelease
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          VERSION: ${{ steps.version.outputs.version }}
+          ARCHIVE: ${{ steps.package.outputs.archive }}
+          CHECKSUM: ${{ steps.package.outputs.checksum }}
+        run: |
+          $notes = @"
+          > [!WARNING]
+          > This is an unsigned preview build. It is not a signed installer and the repository's documented Windows/manual release gates remain open.
+
+          Automated evidence from this exact tagged commit is attached alongside the portable Windows archive and checksum.
+          "@
+
+          $arguments = @(
+            'release', 'create', $env:RELEASE_TAG,
+            $env:ARCHIVE,
+            $env:CHECKSUM,
+            "$env:RUNNER_TEMP/self-check.json",
+            "$env:RUNNER_TEMP/live-slice-evidence.json",
+            '--verify-tag',
+            '--generate-notes',
+            '--fail-on-no-commits',
+            '--prerelease',
+            '--latest=false',
+            '--title', "Agent World $env:VERSION (preview)",
+            '--notes', $notes
+          )
+
+          & gh @arguments
+          if ($LASTEXITCODE -ne 0) {
+            throw "GitHub release creation exited with $LASTEXITCODE"
+          }
