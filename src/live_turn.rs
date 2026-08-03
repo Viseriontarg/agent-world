@@ -516,17 +516,18 @@ impl ProviderPort {
         })
     }
 
+    #[cfg(test)]
     pub fn command_sender(&self) -> &SyncSender<ProviderCommand> {
         self.commands.as_ref().expect("provider port is running")
     }
 
-    pub fn try_send_command(
-        &self,
-        command: ProviderCommand,
-    ) -> Result<(), TrySendError<ProviderCommand>> {
+    pub fn try_send_command(&self, command: ProviderCommand) -> Result<(), &'static str> {
         match self.commands.as_ref() {
-            Some(commands) => commands.try_send(command),
-            None => Err(TrySendError::Disconnected(command)),
+            Some(commands) => commands.try_send(command).map_err(|error| match error {
+                TrySendError::Full(_) => "provider command queue is full",
+                TrySendError::Disconnected(_) => "provider command channel is disconnected",
+            }),
+            None => Err("provider command channel is disconnected"),
         }
     }
 
