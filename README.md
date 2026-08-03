@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>A native command room for AI coding harnesses.</strong><br>
-  Run independent Codex and Claude threads as visible operators—without carrying an Electron city on your back.
+  Keep coding-agent work visible as operators; the implemented live path is one bounded Codex app-server lifecycle.
 </p>
 
 <p align="center">
@@ -43,7 +43,7 @@ keyboard-focusable control while the room/workstation metaphor stays in the doma
 
 ## What exists today
 
-Agent World is a working native executable slice—not a mock-up and not a completed roadmap. The durable core and list-first control surface are implemented; Windows validation, the review loop, live provider turns, and production distribution remain open proof gates.
+Agent World is a working native executable slice—not a mock-up and not a completed roadmap. The durable core, list-first control surface, and one deliberately bounded Codex app-server lifecycle are implemented. Deterministic fixtures prove the in-repository state machine; authenticated Windows enforcement, assistive-technology use, current resource measurements, and production distribution remain open proof gates.
 
 | ✅ Implemented in this repository | ⏳ Not yet proven |
 |---|---|
@@ -51,7 +51,7 @@ Agent World is a working native executable slice—not a mock-up and not a compl
 | Standard `Tab`/`Shift+Tab` traversal, F6 attention cycling, and documented shortcut behavior covered by tests | Published keyboard-only and screen-reader task-flow results |
 | One SQLite writer, bounded queues, durable events, receipts, and payload-conflict rejection | Startup, peak private memory, idle CPU, and process-tree rerun for the current list-first executable |
 | Native Git worktree creation with crash reconciliation and conservative conflict handling | In-app diff inspection, request-changes, merge, and final-commit recording |
-| Zero-turn Codex app-server and Claude CLI capability probes | Live stream, approval/input, interrupt, resume, and fork lifecycle proof |
+| One globally admitted Codex app-server turn with coalesced streaming, exact approval/input correlation, interrupt, completed-session resume, conservative restart handling, and deterministic lifecycle/crash evidence | Authenticated Windows equivalence and policy enforcement, Job Object leak proof, current resource numbers, Claude live turns, and fork |
 | Source-build instructions and Windows CI configuration | Signed installer, update/rollback, uninstall, and release-integrity proof |
 
 A provider surface probe is not a model turn, AccessKit being enabled is not a screen-reader validation result, and the historical resource baseline does not describe the current list-first build.
@@ -91,8 +91,10 @@ agent-world.exe
 │  ├─ bounded timeline projections
 │  └─ native Git worktree reconciliation
 ├─ bounded core → UI event queue
-└─ lazy provider probes
-   ├─ codex app-server
+├─ one-slot provider supervisor
+│  └─ native Codex `app-server --stdio` · reverified worktree · bounded protocol
+└─ lazy zero-turn provider probes
+   ├─ Codex app-server
    └─ Claude CLI
 ```
 
@@ -102,6 +104,30 @@ Worktree intent is committed before Git runs. The immutable plan records the rep
 2. crash after Git but before the terminal SQLite transaction.
 
 Mismatched Git state becomes `indeterminate`; Agent World does not reset, prune, delete, or force its way through uncertainty.
+
+The live runner resolves a native `codex.exe`, requires exactly `codex-cli 0.146.0`, and fails
+closed on an unreviewed enabled feature. A fresh turn is durable before provider dispatch. The
+app-server requests `workspace-write` plus `on-request` approval at thread start/resume and sends
+an explicit turn sandbox policy whose sole writable root is the canonical isolated worktree,
+with sandboxed-command network disabled and both temporary writable-root exclusions enabled. Approval and input
+requests are durably correlated before the UI can answer them; stream chunks are bounded and
+coalesced; interrupt targets the exact durable turn. An unfinished turn found after restart is
+`indeterminate` and is never replayed automatically. A completed session/cursor may be used for
+a later, explicitly admitted turn. Fork remains unimplemented and unproven.
+
+That request contract is not a claim that this Linux/CI run proved Windows enforcement. The
+worktree is the intended write root and Git-state boundary, not a host-secret or worktree-only
+read boundary. Codex may read other user-readable files, and the prompt plus model-selected
+context go to the configured Codex service. The provider itself uses the network even though
+sandboxed commands request `networkAccess: false`. Authenticated Windows policy enforcement,
+read-scope observation, and zero-race/no-orphan Job Object proof remain release gates. One
+**live-turn** tree is admitted; zero-turn readiness/probe children are separate.
+
+Promotion requires an external Windows evidence bundle: Windows build and CLI version, resolved
+native executable, observed sandbox mode, exact launch and effective-feature inventory, redacted
+raw JSONL, pre/post worktree and Git-common-directory manifests, read-scope attempts, process-tree
+counts after success/timeout/overflow/forced close, and reopened SQLite turn/session/message state.
+Unit fixtures and CI do not satisfy that gate.
 
 **→ [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)** covers the thread model, the durable schema, the worktree recovery sequence, and exactly what each provider probe does and does not verify.
 
@@ -113,7 +139,8 @@ Mismatched Git state becomes `indeterminate`; Agent World does not reset, prune,
 - Rust 1.95+ MSVC (`rust-version = 1.95`)
 - Visual C++ Build Tools and a Windows SDK
 - Git
-- Optional probes: installed `codex` and `claude` CLIs
+- Optional informational probes: installed `codex` and `claude` CLIs
+- To run the bounded live slice: an authenticated native `codex.exe` at exactly `codex-cli 0.146.0`; the live runner rechecks the exact version and enabled-feature inventory immediately before app-server launch. The broader generated-schema contract is checked separately by `--probe-providers`, while unexpected runtime methods and shapes fail closed.
 
 ```powershell
 git clone https://github.com/Viseriontarg/agent-world.git
@@ -134,31 +161,34 @@ Runtime data defaults to `%LOCALAPPDATA%\AgentWorld`.
 |---|---|
 | Click or `1`–`9` | Select an operator (`1`–`9` only when no control has focus) |
 | `Enter` | Focus the prompt when no control has focus |
-| `Ctrl+Enter` | Save the selected prompt to the durable timeline |
-| `Ctrl+.` | Request interruption when the selected operator is interruptible |
-| `F6` | Cycle operators requiring attention |
+| `Ctrl+Enter` | Start a live Codex turn when the selected operator is durably eligible |
+| `Ctrl+.` | Interrupt the selected turn only when its durable projection is interruptible |
+| `F6` | Cycle to and focus each outstanding approval, input request, or other operator attention state |
 | `Tab` / `Shift+Tab` | Move keyboard focus through every control and operator |
 
 ## Prove it locally
 
 ```powershell
 .\target\release\agent-world.exe --self-check
+.\target\release\agent-world.exe --live-slice-self-check
 .\target\release\agent-world.exe --probe-providers
 .\scripts\measure.ps1 -WarmupSeconds 300 -SampleSeconds 60
 ```
 
-`--self-check` creates disposable Git repositories and worktrees to verify idempotency and both crash-recovery windows. Provider probes initialize no model turn. The resource script uses a unique temporary runtime root and removes it afterward.
+`--live-slice-self-check` emits machine-readable results for ten lifecycle scripts, ten named crash windows, queue saturation, duplicate suppression, coalescing/transaction counts, and a 50-operator/20,000-message stress fixture. Its `automated_checks_passed` field may be true while `release_ready` and `passed` remain false because Windows/manual gates are still absent. It starts no paid model turn. The resource script uses a unique temporary runtime root and removes it afterward. See [`docs/LIVE_SLICE_EVIDENCE.md`](docs/LIVE_SLICE_EVIDENCE.md).
 
 ## Roadmap
 
 - [x] Native list-first shell with bounded queues and durable SQLite state
 - [x] Conservative Git worktree creation and crash reconciliation
 - [x] Zero-turn Codex and Claude protocol-surface probes
+- [x] One globally admitted Codex app-server lifecycle with deterministic streaming, approval/input, interrupt, completed-session resume, exact feature/request-shape checks, and conservative restart handling
 - [x] Historical Phase‑1 resource baseline for the original spatial interface
 - [ ] Publish the current list-first Windows resource rerun: startup, memory, idle CPU, and process-tree totals
 - [ ] Complete Windows validation at 125%, 150%, and 200% scaling with keyboard-only use, NVDA, and Narrator
 - [ ] Ship the review loop: inspect diff, request changes, merge, and record the final commit
-- [ ] Prove the live provider lifecycle: stream, approval/input, interrupt, resume, and fork
+- [ ] Publish the authenticated Windows Codex evidence bundle: enforcement mode, read scope, JSONL, Git/SQLite state, and process cleanup
+- [ ] Publish authenticated Windows equivalence for the Codex lifecycle; implement and prove Claude and fork
 - [ ] Ship signed Windows distribution: install, update/rollback, uninstall, and release-integrity verification
 - [ ] Complete orchestration leases, directed handoffs, and verified T3 import
 - [ ] Terminals, attachments, richer Markdown, and repository surfaces

@@ -1,4 +1,6 @@
+mod codex_app_server;
 mod core;
+mod live_turn;
 mod providers;
 mod ui;
 
@@ -23,6 +25,13 @@ fn run() -> Result<(), String> {
                 "provider_probe": providers::probe_json()
             }))
             .map_err(err)?
+        );
+        return Ok(());
+    }
+    if args.iter().any(|arg| arg == "--live-slice-self-check") {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&core::live_slice_self_check()?).map_err(err)?
         );
         return Ok(());
     }
@@ -58,8 +67,12 @@ fn run() -> Result<(), String> {
         "Agent World",
         native_options,
         Box::new(move |creation_context| {
-            let app = ui::AgentWorldApp::new(runtime_root, creation_context.egui_ctx.clone())
-                .map_err(std::io::Error::other)?;
+            let app = ui::AgentWorldApp::new(
+                runtime_root,
+                creation_context.egui_ctx.clone(),
+                Box::new(codex_app_server::CodexAppServerRunner::default()),
+            )
+            .map_err(std::io::Error::other)?;
             Ok(Box::new(app))
         }),
     )

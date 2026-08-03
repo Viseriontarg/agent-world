@@ -49,6 +49,32 @@ jobs:
       - name: Durable core, idempotency, and crash-recovery self-check
         run: .\target\release\agent-world.exe --self-check
 
+      - name: Live lifecycle, crash-window, bounds, and stress evidence
+        shell: pwsh
+        run: |
+          $json = (.\target\release\agent-world.exe --live-slice-self-check | Out-String)
+          if ($LASTEXITCODE -ne 0) {
+            throw "live-slice self-check exited with $LASTEXITCODE"
+          }
+          $evidence = $json | ConvertFrom-Json
+          if (-not $evidence.automated_checks_passed) {
+            throw "deterministic live-slice checks did not pass"
+          }
+          if ($evidence.release_ready -or $evidence.passed -or $evidence.issue_acceptance_ready) {
+            throw "fixture evidence must not claim release or issue acceptance readiness"
+          }
+          if ($evidence.external_blocker_count -ne 6) {
+            throw "live-slice evidence must retain all six external blockers"
+          }
+          $json | Set-Content -Encoding utf8 "$env:RUNNER_TEMP\live-slice-evidence.json"
+
+      - name: Upload live-slice evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-slice-evidence-windows
+          path: ${{ runner.temp }}\live-slice-evidence.json
+          if-no-files-found: error
+
       - name: Provider probe surface (zero model turns)
         run: .\target\release\agent-world.exe --probe-providers
         continue-on-error: true
