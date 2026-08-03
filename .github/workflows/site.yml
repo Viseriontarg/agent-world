@@ -40,7 +40,7 @@ jobs:
         run: |
           unexpected_docs="$(
             git ls-files docs |
-              grep -Ev '^docs/(ARCHITECTURE\.md|assets/(agent-world-hero\.png|agent-world-ui\.png|social-preview\.png))$' || true
+              grep -Ev '^docs/(ARCHITECTURE\.md|LIVE_SLICE_EVIDENCE\.md|RELEASING\.md|SLICE_2_EPIC_ACCEPTANCE\.md|assets/(agent-world-hero\.png|agent-world-ui\.png|social-preview\.png))$' || true
           )"
           if [[ -n "$unexpected_docs" ]]; then
             echo "Unapproved files are tracked under docs/:" >&2
