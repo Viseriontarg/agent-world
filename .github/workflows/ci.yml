@@ -22,7 +22,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust 1.95.0 (MSRV)
         uses: dtolnay/rust-toolchain@stable
@@ -69,7 +69,7 @@ jobs:
           $json | Set-Content -Encoding utf8 "$env:RUNNER_TEMP\live-slice-evidence.json"
 
       - name: Upload live-slice evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: live-slice-evidence-windows
           path: ${{ runner.temp }}\live-slice-evidence.json
