@@ -1,0 +1,90 @@
+name: Marketing site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - "docs/**"
+      - ".github/workflows/pages.yml"
+  pull_request:
+    paths:
+      - "website/**"
+      - "docs/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build static site
+        run: |
+          mkdir -p _site
+          cp -R docs/. _site/
+          python website/build.py --output _site
+      - name: Validate local references
+        shell: python
+        run: |
+          from html.parser import HTMLParser
+          from pathlib import Path
+          from urllib.parse import urlsplit
+
+          page = Path("_site/index.html")
+          if not page.is_file():
+              raise SystemExit("built index.html is missing")
+
+          class Links(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.refs = []
+              def handle_starttag(self, tag, attrs):
+                  values = dict(attrs)
+                  for key in ("href", "src"):
+                      if key in values:
+                          self.refs.append(values[key])
+
+          parser = Links()
+          parser.feed(page.read_text(encoding="utf-8"))
+          for ref in parser.refs:
+              parsed = urlsplit(ref)
+              if parsed.scheme or parsed.netloc or ref.startswith(("#", "mailto:", "tel:")):
+                  continue
+              target = (page.parent / parsed.path).resolve()
+              if parsed.path.endswith("/"):
+                  target /= "index.html"
+              if parsed.path and not target.exists():
+                  raise SystemExit(f"Broken local reference: {ref}")
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build static site
+        run: |
+          mkdir -p _site
+          cp -R docs/. _site/
+          python website/build.py --output _site
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
