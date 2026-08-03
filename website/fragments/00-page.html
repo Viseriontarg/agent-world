@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#071018">
+  <meta name="description" content="Agent World is a lean Windows-native command room for independent coding-agent work, durable Git worktrees, and evidence-first orchestration.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Agent World — A native command room for coding agents">
+  <meta property="og:description" content="Projects become rooms. Worktrees become workstations. Coding threads become visible operators.">
+  <meta property="og:image" content="assets/social-preview.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Agent World — A native command room for coding agents">
+  <meta name="twitter:description" content="A lean, durable Windows control room for concurrent AI coding work.">
+  <meta name="twitter:image" content="assets/social-preview.png">
+  <title>Agent World — A native command room for coding agents</title>
+  <link rel="stylesheet" href="site.css">
+  <script>document.documentElement.classList.add('js')</script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="header" data-header>
+    <div class="shell nav">
+      <a class="brand" href="#top" aria-label="Agent World home"><span class="mark" aria-hidden="true">AW</span><span class="brand-copy"><strong>Agent World</strong><small>Native agent command room</small></span></a>
+      <button class="menu" type="button" aria-expanded="false" aria-controls="navigation" data-menu-button><span class="sr-only">Toggle navigation</span><span></span><span></span><span></span></button>
+      <nav class="links" id="navigation" aria-label="Primary" data-nav>
+        <a href="#model">Product</a><a href="#proof">Proof</a><a href="#architecture">Architecture</a><a href="#roadmap">Roadmap</a>
+        <a class="github" href="https://github.com/Viseriontarg/agent-world" target="_blank" rel="noreferrer"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 .7a11.3 11.3 0 0 0-3.57 22c.57.1.77-.25.77-.55v-2.17c-3.15.68-3.81-1.34-3.81-1.34-.51-1.31-1.26-1.66-1.26-1.66-1.03-.7.08-.69.08-.69 1.14.08 1.74 1.17 1.74 1.17 1.01 1.74 2.66 1.24 3.31.95.1-.73.4-1.24.72-1.52-2.51-.29-5.15-1.26-5.15-5.6 0-1.24.44-2.25 1.17-3.04-.12-.29-.51-1.44.11-3 0 0 .95-.3 3.11 1.16A10.8 10.8 0 0 1 12 6.03c.96 0 1.92.13 2.82.38 2.16-1.46 3.11-1.16 3.11-1.16.62 1.56.23 2.71.11 3 .73.79 1.17 1.8 1.17 3.04 0 4.35-2.65 5.31-5.17 5.59.41.35.77 1.04.77 2.1v3.17c0 .3.21.66.78.55A11.3 11.3 0 0 0 12 .7Z"/></svg>GitHub</a>
+      </nav>
+    </div>
+  </header>
+  <main id="main">
+    <section class="hero" id="top"><div class="grid" aria-hidden="true"></div><div class="glow a" aria-hidden="true"></div><div class="glow b" aria-hidden="true"></div>
+      <div class="shell hero-layout">
+        <div class="reveal">
+          <p class="eyebrow">Native Windows command room</p>
+          <h1>Your coding agents need a <em>control room</em>, not another pile of tabs.</h1>
+          <p class="lede">Agent World turns projects into rooms, Git worktrees into workstations, and independent Codex and Claude threads into visible operators—inside one lean native shell.</p>
+          <aside class="boundary"><b>Current proof boundary</b><p>The durable shell, Git isolation, and zero-turn provider probes are working. A real live Codex lifecycle is the next implementation slice—not a feature this page quietly pretends already exists.</p></aside>
+          <div class="actions"><a class="button primary" href="https://github.com/Viseriontarg/agent-world" target="_blank" rel="noreferrer">Explore the source <span aria-hidden="true">↗</span></a><a class="button secondary" href="#proof">See what is proven</a></div>
+          <div class="command" aria-label="Build command"><span aria-hidden="true">›</span><code id="build-command">cargo build --release</code><button type="button" data-copy><span>Copy</span></button><span class="sr-only" data-copy-status aria-live="polite"></span></div>
+        </div>
+        <div class="visual reveal" aria-label="Illustration of Agent World’s native operator control room">
+          <div class="window">
+            <div class="titlebar"><div class="window-brand"><span class="mini">AW</span><strong>Agent World</strong><small>NEXT SLICE PREVIEW</small></div><div class="window-stats"><span><i></i>1 running</span><span><i></i>1 needs you</span></div></div>
+            <div class="window-body">
+              <aside class="rail"><div class="rail-head"><strong>Operators</strong><span>4 total</span></div>
+                <div class="operator active"><span>1</span><span class="avatar">C</span><span class="opcopy"><strong>Codex One</strong><small><b>RUNNING</b> · isolated</small></span><span class="live-dot"></span></div>
+                <div class="operator attention"><span>2</span><span class="avatar">C2</span><span class="opcopy"><strong>Codex Review</strong><small><b>NEEDS YOU</b> · isolated</small></span><span class="bang">!</span></div>
+                <div class="operator"><span>3</span><span class="avatar claude">CL</span><span class="opcopy"><strong>Claude surface</strong><small>PROBED · zero-turn</small></span></div>
+                <div class="operator"><span>4</span><span class="avatar neutral">T</span><span class="opcopy"><strong>Test bench</strong><small>STOPPED · isolated</small></span></div>
+              </aside>
+              <section class="workspace"><div class="workspace-head"><div><strong>Codex One</strong><span class="pill provider">CODEX</span><span class="pill running">RUNNING</span></div><small>C:\Users\…\AgentWorld\worktrees\agent-world\codex-one</small></div>
+                <div class="timeline-label"><strong>Durable timeline</strong><span>event-backed</span></div>
+                <div class="message"><span>USER · EVENT #128</span><p>Implement the smallest safe live-turn adapter. Preserve the receipt and worktree invariants.</p></div>
+                <div class="message agent"><span>CODEX · STREAMING</span><p>I’ll begin with the normalized event contract, then prove interrupt and restart reconciliation before enabling the control<span class="caret" aria-hidden="true"></span></p></div>
+                <div class="approval"><div><span class="approval-icon">!</span><p><strong>Approval required</strong><small>Run the release self-check in the isolated worktree.</small></p></div><div><button type="button" tabindex="-1">Deny</button><button type="button" tabindex="-1">Allow once</button></div></div>
+                <div class="composer"><span>Answer or redirect the selected operator…</span><button type="button" tabindex="-1">Send</button></div>
+              </section>
+            </div>
+            <div class="statusbar"><span>F6 attention · Ctrl+Enter send · Ctrl+. interrupt</span><strong>Durable event #131</strong></div>
+          </div>
+          <div class="float memory"><span>HOST MEMORY</span><strong>75.87 MB</strong><small>published Phase-1 baseline</small></div><div class="float node"><span>NODE AT IDLE</span><strong>0</strong><small>native means native</small></div>
+        </div>
+      </div>
+      <div class="shell principles reveal" aria-label="Core product principles"><div><span>01</span><strong>One native process</strong><small>No Electron or webview runtime</small></div><div><span>02</span><strong>One SQLite writer</strong><small>Durable receipts before side effects</small></div><div><span>03</span><strong>Bounded queues</strong><small>Backpressure stays visible</small></div><div><span>04</span><strong>Git stays sovereign</strong><small>Uncertainty never triggers destructive repair</small></div></div>
+    </section>
