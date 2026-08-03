@@ -1,0 +1,100 @@
+name: site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - "docs/**"
+      - ".github/workflows/site.yml"
+  pull_request:
+    paths:
+      - "website/**"
+      - "docs/**"
+      - ".github/workflows/site.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: static claims · links · accessibility · budgets
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate the dependency-free site
+        run: python website/scripts/validate_site.py
+
+      - name: Smoke-test the published directory
+        shell: bash
+        run: |
+          mkdir -p _site
+          cp -R docs/. _site/
+          cp -R website/. _site/
+
+          python -m http.server 4173 --directory _site >"$RUNNER_TEMP/agent-world-site.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+
+          for attempt in {1..20}; do
+            if curl --fail --silent --show-error http://127.0.0.1:4173/ >/dev/null; then
+              break
+            fi
+            if [[ "$attempt" == "20" ]]; then
+              cat "$RUNNER_TEMP/agent-world-site.log"
+              exit 1
+            fi
+            sleep 0.25
+          done
+
+          curl --fail --silent --show-error http://127.0.0.1:4173/styles.css >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:4173/assets/favicon.svg >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:4173/assets/social-preview.png >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:4173/sitemap.xml >/dev/null
+
+  deploy:
+    name: deploy GitHub Pages
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Assemble published site
+        shell: bash
+        run: |
+          mkdir -p _site
+          cp -R docs/. _site/
+          cp -R website/. _site/
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

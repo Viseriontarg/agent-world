@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#f9f8f3">
+  <meta name="description" content="Agent World is a native Windows control room for coding-agent workstreams, built around durable events, conservative Git worktrees, and proof before promises.">
+
+  <title>Agent World — Control the work. Keep the evidence.</title>
+  <link rel="canonical" href="https://viseriontarg.github.io/agent-world/">
+  <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="./site.webmanifest">
+  <link rel="preload" href="./assets/fonts/bebas-neue-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="./assets/fonts/source-serif-4-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="./styles.css">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Agent World">
+  <meta property="og:title" content="Agent World — Control the work. Keep the evidence.">
+  <meta property="og:description" content="A native Windows control room for coding-agent workstreams, built on durable evidence.">
+  <meta property="og:url" content="https://viseriontarg.github.io/agent-world/">
+  <meta property="og:image" content="https://viseriontarg.github.io/agent-world/assets/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:image:alt" content="Agent World editorial landing page with an event ledger and proof principles">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Agent World — Control the work. Keep the evidence.">
+  <meta name="twitter:description" content="A native Windows control room for coding-agent workstreams, built on durable evidence.">
+  <meta name="twitter:image" content="https://viseriontarg.github.io/agent-world/assets/social-preview.png">
+  <meta name="twitter:image:alt" content="Agent World editorial landing page with an event ledger and proof principles">
+
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Agent World",
+      "description": "A native Windows control room for coding-agent workstreams with a durable event core and conservative Git worktree lifecycle.",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Windows 11",
+      "softwareVersion": "0.1.0 working source slice",
+      "codeRepository": "https://github.com/Viseriontarg/agent-world",
+      "license": "https://opensource.org/license/mit",
+      "isAccessibleForFree": true
+    }
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+
+  <header class="site-header">
+    <div class="page header-inner">
+      <a class="brand" href="./">
+        <strong>Agent World</strong>
+        <span>Evidence for coding-agent work</span>
+      </a>
+
+      <nav class="desktop-nav" aria-label="Primary navigation">
+        <a href="#product">Product</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#reading">Reading</a>
+        <a class="nav-source" href="https://github.com/Viseriontarg/agent-world">View source</a>
+      </nav>
+
+      <details class="mobile-nav">
+        <summary>Menu</summary>
+        <nav aria-label="Mobile navigation">
+          <a href="#product">Product</a>
+          <a href="#architecture">Architecture</a>
+          <a href="#reading">Reading</a>
+          <a href="https://github.com/Viseriontarg/agent-world">View source</a>
+        </nav>
+      </details>
+    </div>
+  </header>
+
+  <main id="main-content">
+    <section class="hero" id="product" aria-labelledby="hero-title">
+      <div class="page hero-grid">
+        <div class="hero-copy">
+          <h1 id="hero-title"><span class="hero-line">Control the work.</span><span class="hero-line">Keep the evidence.</span></h1>
+          <span class="accent-rule" aria-hidden="true"></span>
+          <p>
+            Agent World is a Windows-native control room for coding-agent work.
+            Its local ledger keeps intent and outcomes visible—even when reality is uncertain.
+          </p>
+          <a class="primary-link" href="https://github.com/Viseriontarg/agent-world">View source</a>
+        </div>
+
+        <figure class="ledger" aria-labelledby="ledger-title" aria-describedby="ledger-caption">
+          <div class="ledger-title-row">
+            <h2 id="ledger-title">Event ledger</h2>
+            <span>Agent World</span>
+          </div>
+          <div class="ledger-table" role="table" aria-label="Illustrative durable event order">
+            <div class="ledger-row ledger-head" role="row">
+              <span role="columnheader">Time (UTC)</span>
+              <span role="columnheader">Event</span>
+              <span role="columnheader">Subject</span>
+              <span role="columnheader">Result</span>
+              <span role="columnheader">Seq</span>
+            </div>
+            <div class="ledger-row" role="row">
+              <time role="cell" datetime="2026-08-03T08:41:03.124Z">08:41:03.124</time>
+              <code role="cell">command.received</code>
+              <span role="cell">turn/send</span>
+              <span role="cell">accepted</span>
+              <span role="cell">000201</span>
+            </div>
+            <div class="ledger-row" role="row">
+              <time role="cell" datetime="2026-08-03T08:41:03.612Z">08:41:03.612</time>
+              <code role="cell">turn.queued</code>
+              <span role="cell">codex</span>
+              <span role="cell">recorded</span>
+              <span role="cell">000202</span>
+            </div>
+            <div class="ledger-row" role="row">
+              <time role="cell" datetime="2026-08-03T08:41:05.018Z">08:41:05.018</time>
+              <code role="cell">provider.thread.started</code>
+              <span role="cell">codex</span>
+              <span role="cell">durable</span>
+              <span role="cell">000203</span>
+            </div>
+            <div class="ledger-row" role="row">
+              <time role="cell" datetime="2026-08-03T08:41:18.447Z">08:41:18.447</time>
+              <code role="cell">turn.completed</code>
+              <span role="cell">final result</span>
+              <span role="cell">recorded</span>
+              <span role="cell">000204</span>
+            </div>
+            <div class="ledger-row" role="row">
+              <time role="cell" datetime="2026-08-03T08:41:18.449Z">08:41:18.449</time>
+              <code role="cell">attention.required</code>
+              <span role="cell">operator</span>
+              <span role="cell">visible</span>
+              <span role="cell">000205</span>
+            </div>
+          </div>
+          <div class="ledger-foot">
+            <span>Illustrative sequence · verified by deterministic fixtures</span>
+            <code>cargo run --release -- --self-check</code>
+          </div>
+          <figcaption id="ledger-caption">
+            This is a documentary view of event order, not a product screenshot or an authenticated turn record.
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="proof-band" aria-labelledby="proof-band-title">
+      <h2 class="visually-hidden" id="proof-band-title">Three operating principles</h2>
+      <ol class="page principle-grid">
+        <li>
+          <span class="principle-number">01</span>
+          <div>
+            <h3>Work leaves evidence.</h3>
+            <p>Receipts and immutable intent land before external action becomes visible.</p>
+          </div>
+        </li>
+        <li>
+          <span class="principle-number">02</span>
+          <div>
+            <h3>Parallel work needs answers.</h3>
+            <p>The surface stays organized around what is running, who needs you, and what changed.</p>
+          </div>
+        </li>
+        <li>
+          <span class="principle-number">03</span>
+          <div>
+            <h3>Proof is a sequence.</h3>
+            <p>Unknown outcomes become indeterminate. They are never replayed automatically.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section class="architecture" id="architecture" aria-labelledby="architecture-title">
+      <div class="page architecture-grid">
+        <div class="architecture-copy">
+          <p class="section-kicker">Architecture</p>
+          <h2 id="architecture-title">Durable before action.</h2>
+          <p>
+            Agent World separates recorded intent from execution, then compares the result with Git and provider reality.
+            If the evidence is incomplete or contradictory, the state stays visibly unresolved.
+          </p>
+        </div>
+
+        <ol class="sequence-list">
+          <li>
+            <span>01</span>
+            <strong>Intent</strong>
+            <p>Persist the command receipt and immutable worktree plan.</p>
+            <small>SQLite event log</small>
+          </li>
+          <li>
+            <span>02</span>
+            <strong>Execution</strong>
+            <p>Run native Git or one bounded Codex final-result turn.</p>
+            <small>Verified worktree</small>
+          </li>
+          <li>
+            <span>03</span>
+            <strong>Verification</strong>
+            <p>Compare path, branch, HEAD, common directory, and provider lifecycle.</p>
+            <small>Reality check</small>
+          </li>
+          <li>
+            <span>04</span>
+            <strong>Evidence</strong>
+            <p>Record completed, failed, or indeterminate—never a guessed success.</p>
+            <small>Durable outcome</small>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="boundary" id="reading" aria-labelledby="boundary-title">
+      <div class="page boundary-grid">
+        <div class="boundary-heading">
+          <p class="section-kicker">Current boundary</p>
+          <h2 id="boundary-title">What holds up.<br>What comes next.</h2>
+        </div>
+
+        <div class="boundary-columns">
+          <article>
+            <h3>Proven in source and fixtures</h3>
+            <dl>
+              <div>
+                <dt>Durable core</dt>
+                <dd>One SQLite writer, idempotent receipts, bounded queues, and restart reconciliation.</dd>
+              </div>
+              <div>
+                <dt>Conservative Git</dt>
+                <dd>Worktree intent is recorded first; path, branch, HEAD, and common directory are verified after.</dd>
+              </div>
+              <div>
+                <dt>Bounded Codex path</dt>
+                <dd>Exactly Codex CLI 0.146.0, at most one active turn globally, prompt over stdin, durable session correlation, and no automatic replay.</dd>
+              </div>
+            </dl>
+          </article>
+
+          <article>
+            <h3>Open evidence gates</h3>
+            <dl>
+              <div>
+                <dt>Windows enforcement</dt>
+                <dd>No authenticated model turn—or authoritative real-Windows sandbox, read-scope, network, process-tree, or reopened-SQLite proof—has been run for promotion.</dd>
+              </div>
+              <div>
+                <dt>Authority boundary</dt>
+                <dd>Broad read, no write. The worktree is not a host-secret boundary; the prompt and model-selected readable context go to the configured Codex service. <code>apply_patch</code> may remain model-visible while writes are denied and detected.</dd>
+              </div>
+              <div>
+                <dt>Broader lifecycle</dt>
+                <dd>Claude, streaming, approvals, interrupt, resume, fork, edit workflow, review, merge, signed install, and updates remain gated.</dd>
+              </div>
+            </dl>
+          </article>
+        </div>
+
+        <aside class="capture-note">
+          <p>
+            The tracked spatial screenshot predates the current list-first interface, so this site does not present it as product evidence.
+          </p>
+          <a href="https://github.com/Viseriontarg/agent-world/blob/main/website/CAPTURE_GATE.md">Read the real UI capture gate</a>
+        </aside>
+      </div>
+    </section>
+
+    <section class="build" aria-labelledby="build-title">
+      <div class="page build-grid">
+        <div>
+          <p class="section-kicker">Working source slice</p>
+          <h2 id="build-title">Run the proof yourself.</h2>
+          <p>
+            There is no signed release yet. Build from source on Windows 11 with Rust 1.95+ MSVC,
+            the Visual C++ toolchain, a Windows SDK, and Git.
+          </p>
+          <div class="build-links">
+            <a class="primary-link primary-link-light" href="https://github.com/Viseriontarg/agent-world">Open the repository</a>
+            <a href="https://github.com/Viseriontarg/agent-world/blob/main/CONTRIBUTING.md">Contribute</a>
+          </div>
+        </div>
+        <pre aria-label="PowerShell source build commands"><code>git clone https://github.com/Viseriontarg/agent-world.git
+cd agent-world
+cargo build --release
+.\target\release\agent-world.exe --self-check</code></pre>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="page footer-grid">
+      <div>
+        <strong>Agent World</strong>
+        <p>A native Windows control room for coding-agent workstreams.</p>
+      </div>
+      <nav aria-label="Footer navigation">
+        <a href="https://github.com/Viseriontarg/agent-world">Source</a>
+        <a href="https://github.com/Viseriontarg/agent-world/blob/main/docs/ARCHITECTURE.md">Architecture</a>
+        <a href="https://github.com/Viseriontarg/agent-world/blob/main/SECURITY.md">Security</a>
+        <a href="https://github.com/Viseriontarg/agent-world/blob/main/LICENSE">MIT licence</a>
+      </nav>
+      <p class="footer-meta">Built in Rust · Source-first · No trackers</p>
+    </div>
+  </footer>
+</body>
+</html>
