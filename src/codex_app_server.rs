@@ -15,9 +15,10 @@ use uuid::Uuid;
 
 use crate::{
     live_turn::{
-        ApprovalDecision, MAX_DIAGNOSTIC_BYTES, MAX_INTERACTION_TEXT_BYTES, MAX_OUTPUT_DELTA_BYTES,
-        MAX_PROVIDER_ID_BYTES, ProviderCommand, ProviderEvent, ProviderReadiness, ProviderRunner,
-        ProviderSessionCursor, UserInputAnswer, UserInputQuestion,
+        ApprovalDecision, MAX_DIAGNOSTIC_BYTES, MAX_INTERACTION_ID_BYTES,
+        MAX_INTERACTION_TEXT_BYTES, MAX_OUTPUT_DELTA_BYTES, MAX_PROVIDER_ID_BYTES, ProviderCommand,
+        ProviderEvent, ProviderReadiness, ProviderRunner, ProviderSessionCursor, UserInputAnswer,
+        UserInputQuestion,
     },
     providers::{
         SUPPORTED_CODEX_VERSION, codex_launch_arguments, locate_native_executable,
@@ -988,6 +989,7 @@ struct ActiveTurn {
     requested_session: Option<ProviderSessionCursor>,
     provider_thread_id: Option<String>,
     provider_turn_id: Option<String>,
+    turn_start_response_id: Option<String>,
     provider_side_effect_possible: bool,
     startup_deadline: Option<Instant>,
     interrupt_deadline: Option<Instant>,
@@ -1133,6 +1135,7 @@ impl ProtocolMachine {
             requested_session: session,
             provider_thread_id: None,
             provider_turn_id: None,
+            turn_start_response_id: None,
             provider_side_effect_possible: false,
             startup_deadline: Some(now + self.startup_timeout),
             interrupt_deadline: None,
@@ -1338,6 +1341,9 @@ impl ProtocolMachine {
                 }
             ));
         };
+        if let Err(error) = validate_provider_identifier("Codex thread id", &provider_thread_id) {
+            return self.fail_closed(error);
+        }
         let (turn_id, requested_session) = match self.active.as_ref() {
             Some(active) => (active.turn_id, active.requested_session.clone()),
             None => {
@@ -1385,6 +1391,11 @@ impl ProtocolMachine {
                 "Codex turn/start response omitted result.turn.id ({SUPPORTED_CODEX_VERSION})"
             ));
         };
+        if let Err(error) =
+            validate_provider_identifier("Codex turn/start response id", &provider_turn_id)
+        {
+            return self.fail_closed(error);
+        }
         let Some(active) = self.active.as_mut() else {
             return self
                 .fail_closed("Codex turn/start response arrived without an active turn".into());
@@ -1397,8 +1408,7 @@ impl ProtocolMachine {
             return self
                 .fail_closed("Codex turn/start response disagreed with turn/started".into());
         }
-        active.provider_turn_id = Some(provider_turn_id);
-        active.startup_deadline = None;
+        active.turn_start_response_id = Some(provider_turn_id);
         Vec::new()
     }
 
@@ -1438,7 +1448,7 @@ impl ProtocolMachine {
         let Some(turn_id) = value.pointer("/params/turn/id").and_then(Value::as_str) else {
             return self.schema_failure("turn/started", "params.turn.id");
         };
-        if let Err(error) = self.correlate_provider_ids(thread_id, Some(turn_id), None) {
+        if let Err(error) = self.correlate_turn_started(thread_id, turn_id) {
             return self.fail_closed(error);
         }
         if let Some(active) = self.active.as_mut() {
@@ -1468,7 +1478,7 @@ impl ProtocolMachine {
                 delta.len()
             ));
         }
-        if let Err(error) = self.correlate_provider_ids(thread_id, Some(turn_id), Some(item_id)) {
+        if let Err(error) = self.correlate_provider_ids(thread_id, turn_id, Some(item_id)) {
             return self.fail_closed(error);
         }
         self.coalesce_delta(thread_id, turn_id, item_id, delta, Instant::now())
@@ -1522,7 +1532,7 @@ impl ProtocolMachine {
         let Some(turn_id) = params.pointer("/turn/id").and_then(Value::as_str) else {
             return self.schema_failure("turn/completed", "params.turn.id");
         };
-        if let Err(error) = self.correlate_provider_ids(thread_id, Some(turn_id), None) {
+        if let Err(error) = self.correlate_provider_ids(thread_id, turn_id, None) {
             return self.fail_closed(error);
         }
         let Some(status) = params.pointer("/turn/status").and_then(Value::as_str) else {
@@ -1667,7 +1677,7 @@ impl ProtocolMachine {
         let Some(item_id) = params.get("itemId").and_then(Value::as_str) else {
             return self.schema_failure(method, "params.itemId");
         };
-        if let Err(error) = self.correlate_provider_ids(thread_id, Some(turn_id), Some(item_id)) {
+        if let Err(error) = self.correlate_provider_ids(thread_id, turn_id, Some(item_id)) {
             return self.fail_closed(error);
         }
         let Some(local_turn_id) = self.active.as_ref().map(|active| active.turn_id) else {
@@ -1691,6 +1701,28 @@ impl ProtocolMachine {
             .or_else(|| params.get("grantRoot"))
             .and_then(Value::as_str)
             .map(sanitized_interaction_text);
+        let event = ProviderEvent::ApprovalRequested {
+            turn_id: local_turn_id,
+            provider_event_id: self.event_id(local_turn_id, "approval"),
+            interaction_id: interaction_id.clone(),
+            prompt: sanitized_interaction_text(reason),
+            operation: Some(match kind {
+                InteractionKind::CommandApproval => "command_execution".into(),
+                InteractionKind::FileApproval => "file_change".into(),
+                InteractionKind::UserInput => unreachable!(),
+            }),
+            path,
+            command,
+            consequence: params
+                .get("additionalPermissions")
+                .filter(|value| !value.is_null())
+                .map(|_| "grants additional permissions for this operation".into()),
+        };
+        if let Err(error) = event.validate() {
+            return self.fail_closed(format!(
+                "Codex approval request exceeded the durable interaction contract: {error}"
+            ));
+        }
         self.interactions.insert(
             interaction_id.clone(),
             PendingInteraction {
@@ -1706,23 +1738,7 @@ impl ProtocolMachine {
         if let Some(event) = self.flush_output() {
             effects.push(Effect::Emit(event));
         }
-        effects.push(Effect::Emit(ProviderEvent::ApprovalRequested {
-            turn_id: local_turn_id,
-            provider_event_id: self.event_id(local_turn_id, "approval"),
-            interaction_id,
-            prompt: sanitized_interaction_text(reason),
-            operation: Some(match kind {
-                InteractionKind::CommandApproval => "command_execution".into(),
-                InteractionKind::FileApproval => "file_change".into(),
-                InteractionKind::UserInput => unreachable!(),
-            }),
-            path,
-            command,
-            consequence: params
-                .get("additionalPermissions")
-                .filter(|value| !value.is_null())
-                .map(|_| "grants additional permissions for this operation".into()),
-        }));
+        effects.push(Effect::Emit(event));
         effects
     }
 
@@ -1744,7 +1760,7 @@ impl ProtocolMachine {
         let Some(item_id) = params.get("itemId").and_then(Value::as_str) else {
             return self.schema_failure(method, "params.itemId");
         };
-        if let Err(error) = self.correlate_provider_ids(thread_id, Some(turn_id), Some(item_id)) {
+        if let Err(error) = self.correlate_provider_ids(thread_id, turn_id, Some(item_id)) {
             return self.fail_closed(error);
         }
         let Some(raw_questions) = params.get("questions").and_then(Value::as_array) else {
@@ -1776,6 +1792,13 @@ impl ProtocolMachine {
             let Some(prompt) = question.get("question").and_then(Value::as_str) else {
                 return self.schema_failure(method, "params.questions[].question");
             };
+            if let Err(error) = validate_identifier(
+                "Codex user-input question id",
+                question_id,
+                MAX_INTERACTION_ID_BYTES,
+            ) {
+                return self.fail_closed(error);
+            }
             if questions
                 .iter()
                 .any(|item: &UserInputQuestion| item.question_id == question_id)
@@ -1791,7 +1814,7 @@ impl ProtocolMachine {
                 format!("{header}: {prompt}")
             };
             questions.push(UserInputQuestion {
-                question_id: bounded_identifier(question_id),
+                question_id: question_id.to_owned(),
                 prompt: sanitized_interaction_text(&combined),
             });
         }
@@ -1799,6 +1822,25 @@ impl ProtocolMachine {
             return self.fail_closed("Codex requested user input without an active turn".into());
         };
         let interaction_id = self.interaction_id(local_turn_id);
+        let event = ProviderEvent::UserInputRequested {
+            turn_id: local_turn_id,
+            provider_event_id: self.event_id(local_turn_id, "input"),
+            interaction_id: interaction_id.clone(),
+            prompt: "Codex needs user input before it can continue".into(),
+            questions,
+        };
+        if let Err(error) = event.validate() {
+            return self.fail_closed(format!(
+                "Codex user-input request exceeded the durable interaction contract: {error}"
+            ));
+        }
+        let question_ids = match &event {
+            ProviderEvent::UserInputRequested { questions, .. } => questions
+                .iter()
+                .map(|question| question.question_id.clone())
+                .collect(),
+            _ => unreachable!(),
+        };
         self.interactions.insert(
             interaction_id.clone(),
             PendingInteraction {
@@ -1807,23 +1849,14 @@ impl ProtocolMachine {
                 fingerprint,
                 kind: InteractionKind::UserInput,
                 turn_id: local_turn_id,
-                question_ids: questions
-                    .iter()
-                    .map(|question| question.question_id.clone())
-                    .collect(),
+                question_ids,
             },
         );
         let mut effects = Vec::new();
         if let Some(event) = self.flush_output() {
             effects.push(Effect::Emit(event));
         }
-        effects.push(Effect::Emit(ProviderEvent::UserInputRequested {
-            turn_id: local_turn_id,
-            provider_event_id: self.event_id(local_turn_id, "input"),
-            interaction_id,
-            prompt: "Codex needs user input before it can continue".into(),
-            questions,
-        }));
+        effects.push(Effect::Emit(event));
         effects
     }
 
@@ -1970,36 +2003,68 @@ impl ProtocolMachine {
         effects
     }
 
-    fn correlate_provider_ids(
-        &self,
-        thread_id: &str,
-        turn_id: Option<&str>,
-        item_id: Option<&str>,
-    ) -> Result<(), String> {
+    fn correlate_turn_started(&self, thread_id: &str, turn_id: &str) -> Result<(), String> {
+        validate_provider_identifier("Codex event thread id", thread_id)?;
+        validate_provider_identifier("Codex event turn id", turn_id)?;
         let active = self
             .active
             .as_ref()
-            .ok_or_else(|| "Codex event arrived without an active turn".to_owned())?;
-        let expected_thread = active.provider_thread_id.as_deref().or_else(|| {
-            active
-                .requested_session
-                .as_ref()
-                .map(|session| session.session_id.as_str())
-        });
-        if expected_thread.is_some_and(|expected| expected != thread_id) {
+            .ok_or_else(|| "Codex turn/started arrived without an active turn".to_owned())?;
+        let expected_thread = active
+            .provider_thread_id
+            .as_deref()
+            .ok_or_else(|| "Codex turn/started arrived before thread correlation".to_owned())?;
+        if expected_thread != thread_id {
             return Err(format!(
                 "Codex event thread id {thread_id:?} did not match the correlated thread id"
             ));
         }
-        if let (Some(expected), Some(actual)) = (active.provider_turn_id.as_deref(), turn_id)
-            && expected != actual
+        if active
+            .provider_turn_id
+            .as_deref()
+            .is_some_and(|expected| expected != turn_id)
+            || active
+                .turn_start_response_id
+                .as_deref()
+                .is_some_and(|expected| expected != turn_id)
         {
             return Err(format!(
-                "Codex event turn id {actual:?} did not match the correlated turn id"
+                "Codex turn/started id {turn_id:?} disagreed with the active turn correlation"
             ));
         }
-        if item_id.is_some_and(str::is_empty) {
-            return Err("Codex event item id was empty".into());
+        Ok(())
+    }
+
+    fn correlate_provider_ids(
+        &self,
+        thread_id: &str,
+        turn_id: &str,
+        item_id: Option<&str>,
+    ) -> Result<(), String> {
+        validate_provider_identifier("Codex event thread id", thread_id)?;
+        validate_provider_identifier("Codex event turn id", turn_id)?;
+        if let Some(item_id) = item_id {
+            validate_provider_identifier("Codex event item id", item_id)?;
+        }
+        let active = self
+            .active
+            .as_ref()
+            .ok_or_else(|| "Codex event arrived without an active turn".to_owned())?;
+        let expected_thread = active.provider_thread_id.as_deref().ok_or_else(|| {
+            "Codex turn-scoped event arrived before thread correlation".to_owned()
+        })?;
+        if expected_thread != thread_id {
+            return Err(format!(
+                "Codex event thread id {thread_id:?} did not match the correlated thread id"
+            ));
+        }
+        let expected_turn = active.provider_turn_id.as_deref().ok_or_else(|| {
+            "Codex turn-scoped event arrived before turn/started established its id".to_owned()
+        })?;
+        if expected_turn != turn_id {
+            return Err(format!(
+                "Codex event turn id {turn_id:?} did not match the correlated turn id"
+            ));
         }
         Ok(())
     }
@@ -2228,12 +2293,21 @@ fn sanitized_interaction_text(value: &str) -> String {
     bounded_interaction_text(&sanitize_diagnostic(value))
 }
 
-fn bounded_identifier(value: &str) -> String {
-    truncate_utf8(
-        value,
-        crate::live_turn::MAX_INTERACTION_ID_BYTES,
-        "-truncated",
-    )
+fn validate_provider_identifier(label: &str, value: &str) -> Result<(), String> {
+    validate_identifier(label, value, MAX_PROVIDER_ID_BYTES)
+}
+
+fn validate_identifier(label: &str, value: &str, max_bytes: usize) -> Result<(), String> {
+    if value.trim().is_empty() {
+        return Err(format!("{label} must not be empty"));
+    }
+    if value.len() > max_bytes {
+        return Err(format!(
+            "{label} is {} bytes; maximum is {max_bytes}",
+            value.len()
+        ));
+    }
+    Ok(())
 }
 
 fn truncate_utf8(value: &str, max: usize, marker: &str) -> String {
@@ -2404,9 +2478,20 @@ mod tests {
 
         fn start_provider_turn(&mut self, provider_turn_id: &str) {
             let request = self.take_request("turn/start");
+            let provider_thread_id = request["params"]["threadId"]
+                .as_str()
+                .expect("turn/start thread id")
+                .to_owned();
             self.line(json!({
                 "id": request["id"],
                 "result": {"turn": {"id": provider_turn_id}}
+            }));
+            self.line(json!({
+                "method": "turn/started",
+                "params": {
+                    "threadId": provider_thread_id,
+                    "turn": {"id": provider_turn_id}
+                }
             }));
         }
     }
@@ -2503,6 +2588,77 @@ mod tests {
             1
         );
         assert!(harness.forced.is_empty());
+    }
+
+    #[test]
+    fn review_regression_turn_scoped_terminal_requires_turn_started_correlation() {
+        let mut harness = PipeHarness::start(None);
+        harness.establish_new_thread("thread-correlation");
+        let request = harness.take_request("turn/start");
+        harness.line(json!({
+            "id": request["id"],
+            "result": {"turn": {"id": "turn-correlation"}}
+        }));
+        harness.line(json!({
+            "method": "turn/completed",
+            "params": {
+                "threadId": "thread-correlation",
+                "turn": {"id": "turn-correlation", "status": "completed", "items": []}
+            }
+        }));
+
+        assert_eq!(
+            event_names(&harness.events),
+            vec!["starting", "session", "failed"]
+        );
+        assert_eq!(harness.forced.len(), 1);
+        let diagnostic = harness
+            .events
+            .iter()
+            .find_map(|event| match event {
+                ProviderEvent::Failed { diagnostic, .. } => Some(diagnostic.as_str()),
+                _ => None,
+            })
+            .expect("correlation failure");
+        assert!(diagnostic.contains("before turn/started"), "{diagnostic}");
+    }
+
+    #[test]
+    fn review_regression_user_input_rejects_oversized_question_ids_without_truncation() {
+        let mut harness = PipeHarness::start(None);
+        harness.establish_new_thread("thread-question-id");
+        harness.start_provider_turn("turn-question-id");
+        harness.line(json!({
+            "id": "oversized-question-rpc",
+            "method": "item/tool/requestUserInput",
+            "params": {
+                "threadId": "thread-question-id",
+                "turnId": "turn-question-id",
+                "itemId": "item-question-id",
+                "questions": [{
+                    "id": "q".repeat(MAX_INTERACTION_ID_BYTES + 1),
+                    "header": "Scope",
+                    "question": "Choose a scope"
+                }]
+            }
+        }));
+
+        assert!(
+            !harness
+                .events
+                .iter()
+                .any(|event| { matches!(event, ProviderEvent::UserInputRequested { .. }) })
+        );
+        let diagnostic = harness
+            .events
+            .iter()
+            .find_map(|event| match event {
+                ProviderEvent::Failed { diagnostic, .. } => Some(diagnostic.as_str()),
+                _ => None,
+            })
+            .expect("oversized question id failure");
+        assert!(diagnostic.contains("maximum is 256"), "{diagnostic}");
+        assert_eq!(harness.forced.len(), 1);
     }
 
     #[test]

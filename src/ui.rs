@@ -1713,24 +1713,54 @@ fn actor_state_label(actor: &ThreadActorSnapshot) -> &'static str {
 }
 
 fn operator_accessible_label(actor: &ThreadActorSnapshot) -> String {
-    let required_action = match actor.state {
-        ActorState::AwaitingApproval => {
-            "Review the pending approval and choose Allow once or Deny."
+    let required_action = if let Some(turn) = actor.live_turn.as_ref() {
+        let pending_kind = turn
+            .interaction
+            .as_ref()
+            .filter(|interaction| interaction.status == InteractionStatus::Pending)
+            .map(|interaction| interaction.kind);
+        match (turn.state, pending_kind) {
+            (LiveTurnState::AwaitingApproval, Some(InteractionKind::Approval)) => {
+                "Review the pending approval and choose Allow once or Deny."
+            }
+            (LiveTurnState::AwaitingUserInput, Some(InteractionKind::UserInput)) => {
+                "Answer the pending provider question."
+            }
+            (LiveTurnState::AwaitingApproval | LiveTurnState::AwaitingUserInput, _) => {
+                "Inspect the durable timeline; the pending provider interaction is unavailable."
+            }
+            (LiveTurnState::Indeterminate, _) => {
+                "Inspect the durable timeline; Agent World will not retry automatically."
+            }
+            (LiveTurnState::Failed, _) => "Inspect the durable failure before starting new work.",
+            (LiveTurnState::Accepted | LiveTurnState::Starting | LiveTurnState::Streaming, _) => {
+                "Watch the committed timeline or request interrupt when enabled."
+            }
+            (LiveTurnState::Interrupting, _) => "Wait for the durable interrupt acknowledgement.",
+            (LiveTurnState::Completed, _) if actor.worktree_path.is_none() => {
+                "Create and verify an isolated worktree."
+            }
+            (LiveTurnState::Completed, _) => "Enter a prompt to start a Codex turn.",
         }
-        ActorState::WaitingUser => "Answer the pending provider question.",
-        ActorState::Indeterminate => {
-            "Inspect the durable timeline; Agent World will not retry automatically."
+    } else {
+        match actor.state {
+            ActorState::AwaitingApproval | ActorState::WaitingUser => {
+                "Inspect the durable timeline; the pending provider interaction is unavailable."
+            }
+            ActorState::Indeterminate => {
+                "Inspect the durable timeline; Agent World will not retry automatically."
+            }
+            ActorState::Failed => "Inspect the durable failure before starting new work.",
+            ActorState::Starting | ActorState::Running => {
+                "Watch the committed timeline or request interrupt when enabled."
+            }
+            ActorState::Interrupting => "Wait for the durable interrupt acknowledgement.",
+            ActorState::Idle | ActorState::Stopped if actor.worktree_path.is_none() => {
+                "Create and verify an isolated worktree."
+            }
+            ActorState::Idle | ActorState::Stopped => "Enter a prompt to start a Codex turn.",
+            ActorState::Archived => "No action is available for this archived operator.",
         }
-        ActorState::Failed => "Inspect the durable failure before starting new work.",
-        ActorState::Starting | ActorState::Running => {
-            "Watch the committed timeline or request interrupt when enabled."
-        }
-        ActorState::Interrupting => "Wait for the durable interrupt acknowledgement.",
-        ActorState::Idle | ActorState::Stopped if actor.worktree_path.is_none() => {
-            "Create and verify an isolated worktree."
-        }
-        ActorState::Idle | ActorState::Stopped => "Enter a prompt to start a Codex turn.",
-        ActorState::Archived => "No action is available for this archived operator.",
     };
     format!(
         "Operator {}. Provider {}. State {}. {}",
@@ -1967,6 +1997,7 @@ fn err(error: impl std::fmt::Display) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{core::LiveTurnSnapshot, live_turn::ProviderSessionCursor};
 
     fn actor(index: usize, state: ActorState, attention: bool) -> ThreadActorSnapshot {
         ThreadActorSnapshot {
@@ -3044,7 +3075,19 @@ mod tests {
 
     #[test]
     fn accesskit_operator_labels_include_state_and_required_action() {
-        let approval = actor(0, ActorState::AwaitingApproval, true);
+        let mut approval = actor(0, ActorState::AwaitingApproval, true);
+        approval.live_turn = Some(LiveTurnSnapshot {
+            turn_id: Uuid::new_v4(),
+            state: LiveTurnState::AwaitingApproval,
+            session: None,
+            interruptible: true,
+            interaction: Some(interaction(
+                "approval-label",
+                InteractionKind::Approval,
+                InteractionStatus::Pending,
+            )),
+            recovery: RecoveryDisposition::None,
+        });
         let approval_label = operator_accessible_label(&approval);
         assert!(approval_label.contains(&approval.label));
         assert!(approval_label.contains("NEEDS APPROVAL"));
@@ -3054,5 +3097,27 @@ mod tests {
         let indeterminate_label = operator_accessible_label(&indeterminate);
         assert!(indeterminate_label.contains("INDETERMINATE"));
         assert!(indeterminate_label.contains("will not retry automatically"));
+    }
+
+    #[test]
+    fn review_regression_accesskit_completed_turn_has_no_phantom_pending_action() {
+        let mut completed = actor(0, ActorState::WaitingUser, true);
+        completed.worktree_path = Some(PathBuf::from("C:/fixture"));
+        completed.live_turn = Some(LiveTurnSnapshot {
+            turn_id: Uuid::new_v4(),
+            state: LiveTurnState::Completed,
+            session: Some(ProviderSessionCursor {
+                session_id: "completed-session".into(),
+                resume_cursor: "completed-cursor".into(),
+            }),
+            interruptible: false,
+            interaction: None,
+            recovery: RecoveryDisposition::Completed,
+        });
+
+        let label = operator_accessible_label(&completed);
+        assert!(label.contains("State COMPLETED"), "{label}");
+        assert!(label.contains("Enter a prompt"), "{label}");
+        assert!(!label.contains("pending provider question"), "{label}");
     }
 }

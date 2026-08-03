@@ -8,7 +8,7 @@ use std::{
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
-        mpsc::{self, Receiver, RecvTimeoutError, SyncSender},
+        mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TryRecvError},
     },
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -16,9 +16,10 @@ use std::{
 use uuid::Uuid;
 
 use crate::live_turn::{
-    ApprovalDecision, ISOLATED_WORKSPACE_WRITE_POLICY, LiveTurnState, MAX_INTERACTION_ID_BYTES,
-    MAX_OUTPUT_DELTA_BYTES, MAX_PROMPT_BYTES, ProviderCommand, ProviderEvent, ProviderPort,
-    ProviderReadiness, ProviderRunner, ProviderSessionCursor, UserInputAnswer,
+    ApprovalDecision, ISOLATED_WORKSPACE_WRITE_POLICY, LiveTurnState, MAX_DURABLE_JSON_BYTES,
+    MAX_INTERACTION_ID_BYTES, MAX_OUTPUT_DELTA_BYTES, MAX_PROMPT_BYTES, ProviderCommand,
+    ProviderEvent, ProviderPort, ProviderReadiness, ProviderRunner, ProviderSessionCursor,
+    UserInputAnswer,
 };
 
 mod live_slice_qa;
@@ -584,84 +585,82 @@ impl CoreHandle {
         let core_join = thread::Builder::new()
             .name("agent-world-core".into())
             .spawn(move || {
-                loop {
+                let mut provider_quarantined = false;
+                let mut provider_joined = false;
+                'core: loop {
                     if thread_shutdown_requested.load(Ordering::Acquire) {
                         break;
                     }
                     let provider_events = collect_provider_event_batch(&provider);
                     if !provider_events.is_empty() {
-                        let event = apply_provider_event_batch(&mut store, &provider_events);
-                        if event_tx.send(event).is_err() {
-                            break;
+                        if !provider_quarantined {
+                            let events = match apply_provider_event_batch(
+                                &mut store,
+                                &provider_events,
+                            ) {
+                                Ok(event) => vec![event],
+                                Err(error) => {
+                                    provider_quarantined = true;
+                                    quarantine_provider(
+                                        &mut store,
+                                        &mut provider,
+                                        &format!(
+                                            "provider event batch was rejected and the owned provider was stopped: {error}"
+                                        ),
+                                    )
+                                }
+                            };
+                            if !publish_core_events(&event_tx, &wake_ui, events) {
+                                break;
+                            }
                         }
-                        wake_ui();
+                        match input_rx.try_recv() {
+                            Ok(input) => {
+                                let events = handle_core_input(&mut store, &provider, input);
+                                if !publish_core_events(&event_tx, &wake_ui, events) {
+                                    break 'core;
+                                }
+                            }
+                            Err(TryRecvError::Empty) => {}
+                            Err(TryRecvError::Disconnected) => break,
+                        }
                         continue;
                     }
+
+                    if !provider_joined && provider.is_finished() {
+                        let outcome = provider.finish_if_stopped();
+                        provider_joined = true;
+                        let events = if provider_quarantined {
+                            outcome.err().map_or_else(Vec::new, |error| {
+                                vec![CoreEvent::Error(format!(
+                                    "stopped provider runner failed while joining: {error}"
+                                ))]
+                            })
+                        } else {
+                            provider_quarantined = true;
+                            let diagnostic = match outcome {
+                                Ok(true) => {
+                                    "provider runner stopped before core shutdown".to_owned()
+                                }
+                                Ok(false) => continue,
+                                Err(error) => format!("provider runner stopped: {error}"),
+                            };
+                            quarantine_provider(&mut store, &mut provider, &diagnostic)
+                        };
+                        if !publish_core_events(&event_tx, &wake_ui, events) {
+                            break;
+                        }
+                    }
+
                     let input = match input_rx.recv_timeout(CORE_POLL_INTERVAL) {
                         Ok(input) => input,
                         Err(RecvTimeoutError::Timeout) => continue,
                         Err(RecvTimeoutError::Disconnected) => break,
                     };
-                    let event = match input {
-                        CoreInput::Execute(envelope) => {
-                            let command_id = envelope.command_id;
-                            match store.execute_with_provider_command(envelope) {
-                                Ok((receipt, Some(command))) => {
-                                    if let Err(error) =
-                                        provider.command_sender().try_send(command.clone())
-                                        && let Some(turn_id) = command.turn_id()
-                                    {
-                                        let side_effect_possible =
-                                            dispatch_failure_side_effect_possible(&command);
-                                        let failure = ProviderEvent::ProcessLost {
-                                            turn_id,
-                                            provider_event_id: format!(
-                                                "core:{command_id}:dispatch-failed"
-                                            ),
-                                            diagnostic: format!(
-                                                "provider command was durably accepted but could not be dispatched: {error}"
-                                            ),
-                                            side_effect_possible,
-                                        };
-                                        match store.apply_provider_events(&[failure]) {
-                                            Ok(changes) => {
-                                                if let Some(change) = changes.last() {
-                                                    let _ = event_tx.try_send(
-                                                        CoreEvent::TurnChanged {
-                                                            thread_id: change.thread_id,
-                                                            status: change.status.clone(),
-                                                        },
-                                                    );
-                                                }
-                                            }
-                                            Err(failure_error) => {
-                                                let _ = event_tx
-                                                    .try_send(CoreEvent::Error(failure_error));
-                                            }
-                                        }
-                                    }
-                                    CoreEvent::Receipt(receipt)
-                                }
-                                Ok((receipt, None)) => CoreEvent::Receipt(receipt),
-                                Err(error) => CoreEvent::CommandError { command_id, error },
-                            }
-                        }
-                        CoreInput::Bootstrap => store
-                            .bootstrap_snapshot()
-                            .map(CoreEvent::Bootstrap)
-                            .unwrap_or_else(CoreEvent::Error),
-                        CoreInput::Timeline { thread_id, limit } => store
-                            .timeline_page(thread_id, limit.min(100))
-                            .map(|messages| CoreEvent::Timeline {
-                                thread_id,
-                                messages,
-                            })
-                            .unwrap_or_else(CoreEvent::Error),
-                    };
-                    if event_tx.send(event).is_err() {
+                    let events = handle_core_input(&mut store, &provider, input);
+                    if !publish_core_events(&event_tx, &wake_ui, events) {
                         break;
                     }
-                    wake_ui();
                 }
                 provider.begin_shutdown();
                 let provider_deadline = Instant::now() + Duration::from_secs(6);
@@ -670,7 +669,9 @@ impl CoreHandle {
                         Ok(first) => {
                             let mut events = vec![first];
                             events.extend(collect_provider_event_batch(&provider));
-                            let _ = store.apply_provider_events(&events);
+                            if !provider_quarantined {
+                                let _ = store.apply_provider_events(&events);
+                            }
                         }
                         Err(RecvTimeoutError::Timeout) => {}
                         Err(RecvTimeoutError::Disconnected) => {
@@ -740,30 +741,124 @@ fn dispatch_failure_side_effect_possible(command: &ProviderCommand) -> bool {
     )
 }
 
-fn apply_provider_event_batch(store: &mut Store, events: &[ProviderEvent]) -> CoreEvent {
+fn apply_provider_event_batch(store: &mut Store, events: &[ProviderEvent]) -> AppResult<CoreEvent> {
     let last_turn_id = events.last().map(ProviderEvent::turn_id);
-    match store.apply_provider_events(events) {
-        Ok(changes) => changes
-            .into_iter()
-            .last()
-            .map(|change| CoreEvent::TurnChanged {
-                thread_id: change.thread_id,
-                status: change.status,
+    store
+        .apply_provider_events(events)?
+        .into_iter()
+        .last()
+        .map(|change| CoreEvent::TurnChanged {
+            thread_id: change.thread_id,
+            status: change.status,
+        })
+        .or_else(|| {
+            last_turn_id.and_then(|turn_id| {
+                store
+                    .turn_change(turn_id)
+                    .ok()
+                    .map(|change| CoreEvent::TurnChanged {
+                        thread_id: change.thread_id,
+                        status: change.status,
+                    })
             })
-            .or_else(|| {
-                last_turn_id.and_then(|turn_id| {
-                    store
-                        .turn_change(turn_id)
-                        .ok()
-                        .map(|change| CoreEvent::TurnChanged {
-                            thread_id: change.thread_id,
-                            status: change.status,
-                        })
+        })
+        .ok_or_else(|| "empty provider event batch was ignored".into())
+}
+
+fn handle_core_input(
+    store: &mut Store,
+    provider: &ProviderPort,
+    input: CoreInput,
+) -> Vec<CoreEvent> {
+    match input {
+        CoreInput::Execute(envelope) => {
+            let command_id = envelope.command_id;
+            match store.execute_with_provider_command(envelope) {
+                Ok((receipt, Some(command))) => {
+                    let mut events = Vec::new();
+                    if let Err(error) = provider.try_send_command(command.clone())
+                        && let Some(turn_id) = command.turn_id()
+                    {
+                        let side_effect_possible = dispatch_failure_side_effect_possible(&command);
+                        let failure = ProviderEvent::ProcessLost {
+                            turn_id,
+                            provider_event_id: format!("core:{command_id}:dispatch-failed"),
+                            diagnostic: terminal_diagnostic(&format!(
+                                "provider command was durably accepted but could not be dispatched: {error}"
+                            )),
+                            side_effect_possible,
+                        };
+                        match store.apply_provider_events(&[failure]) {
+                            Ok(changes) => events.extend(changes.into_iter().map(|change| {
+                                CoreEvent::TurnChanged {
+                                    thread_id: change.thread_id,
+                                    status: change.status,
+                                }
+                            })),
+                            Err(failure_error) => events.push(CoreEvent::Error(failure_error)),
+                        }
+                    }
+                    events.push(CoreEvent::Receipt(receipt));
+                    events
+                }
+                Ok((receipt, None)) => vec![CoreEvent::Receipt(receipt)],
+                Err(error) => vec![CoreEvent::CommandError { command_id, error }],
+            }
+        }
+        CoreInput::Bootstrap => vec![
+            store
+                .bootstrap_snapshot()
+                .map(CoreEvent::Bootstrap)
+                .unwrap_or_else(CoreEvent::Error),
+        ],
+        CoreInput::Timeline { thread_id, limit } => vec![
+            store
+                .timeline_page(thread_id, limit.min(100))
+                .map(|messages| CoreEvent::Timeline {
+                    thread_id,
+                    messages,
                 })
-            })
-            .unwrap_or_else(|| CoreEvent::Error("empty provider event batch was ignored".into())),
-        Err(error) => CoreEvent::Error(error),
+                .unwrap_or_else(CoreEvent::Error),
+        ],
     }
+}
+
+fn quarantine_provider(
+    store: &mut Store,
+    provider: &mut ProviderPort,
+    diagnostic: &str,
+) -> Vec<CoreEvent> {
+    provider.begin_shutdown();
+    let diagnostic = terminal_diagnostic(diagnostic);
+    store.provider_readiness = ProviderReadiness::Unavailable {
+        diagnostic: diagnostic.clone(),
+    };
+    let mut events = vec![CoreEvent::Error(diagnostic.clone())];
+    match store.terminalize_active_provider_turn(&diagnostic) {
+        Ok(Some(change)) => events.push(CoreEvent::TurnChanged {
+            thread_id: change.thread_id,
+            status: change.status,
+        }),
+        Ok(None) => {}
+        Err(error) => events.push(CoreEvent::Error(format!(
+            "active turn could not be terminalized after provider loss: {error}"
+        ))),
+    }
+    events
+}
+
+fn publish_core_events(
+    event_tx: &SyncSender<CoreEvent>,
+    wake_ui: &impl Fn(),
+    events: Vec<CoreEvent>,
+) -> bool {
+    for event in events {
+        if event_tx.send(event).is_err() {
+            return false;
+        }
+        wake_ui();
+    }
+    true
 }
 
 impl Drop for CoreHandle {
@@ -1528,6 +1623,36 @@ impl Store {
         })
     }
 
+    fn terminalize_active_provider_turn(
+        &mut self,
+        diagnostic: &str,
+    ) -> AppResult<Option<TurnChange>> {
+        let turn_id = self
+            .conn
+            .query_row(
+                "SELECT turn_id FROM turns
+                 WHERE status IN (
+                    'accepted', 'starting', 'streaming', 'awaiting_approval',
+                    'awaiting_user_input', 'interrupting'
+                 ) LIMIT 1",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(err)?;
+        let Some(turn_id) = turn_id else {
+            return Ok(None);
+        };
+        let turn_id = Uuid::parse_str(&turn_id).map_err(err)?;
+        self.apply_provider_events(&[ProviderEvent::ProcessLost {
+            turn_id,
+            provider_event_id: format!("core:provider-unavailable:{turn_id}"),
+            diagnostic: terminal_diagnostic(diagnostic),
+            side_effect_possible: true,
+        }])
+        .map(|changes| changes.into_iter().last())
+    }
+
     fn reconcile_unfinished_turns(&mut self) -> AppResult<Vec<String>> {
         let turn_ids = {
             let mut statement = self
@@ -1633,7 +1758,12 @@ impl Store {
                 now,
             );
         }
-        if let Err(error) = validate_command(&tx, &envelope.command, &self.provider_readiness) {
+        if let Err(error) = validate_command(
+            &tx,
+            &envelope.command,
+            &self.provider_readiness,
+            &self.runtime_root,
+        ) {
             return store_rejection(tx, &envelope, &payload, json!({"error":error}), now);
         }
 
@@ -1730,7 +1860,7 @@ impl Store {
             return Err(error);
         }
 
-        match create_or_reconcile_worktree(&plan) {
+        match create_or_reconcile_worktree(&plan, &self.runtime_root.join("worktrees")) {
             Ok(()) => self.finalize_worktree(&envelope, &payload, &plan),
             Err(error) => {
                 if error.indeterminate {
@@ -1807,6 +1937,7 @@ impl Store {
                 plan.path.display()
             ));
         }
+        validate_worktree_destination_parent(plan, &self.runtime_root.join("worktrees"))?;
         Ok(())
     }
 
@@ -1917,16 +2048,17 @@ impl Store {
             .file_name()
             .and_then(|name| name.to_str())
             .unwrap_or("repo");
-        let worktree_root = self.runtime_root.join("worktrees");
-        fs::create_dir_all(worktree_root.join(repo_name)).map_err(err)?;
-        let worktree_root = portable_windows_path(worktree_root.canonicalize().map_err(err)?);
-        let destination = worktree_root
+        let worktrees_root = self.runtime_root.join("worktrees");
+        fs::create_dir_all(worktrees_root.join(repo_name)).map_err(err)?;
+        let trusted_worktrees_root =
+            portable_windows_path(worktrees_root.canonicalize().map_err(err)?);
+        let destination = trusted_worktrees_root
             .join(repo_name)
             .join(format!("{slug}-{short_id}"));
-        if !destination.starts_with(&worktree_root) {
+        if !destination.starts_with(&trusted_worktrees_root) {
             return Err("worktree destination escaped the runtime root".into());
         }
-        Ok(WorktreePlan {
+        let plan = WorktreePlan {
             worktree_id,
             thread_id,
             project_id: Uuid::parse_str(&project_id).map_err(err)?,
@@ -1935,7 +2067,9 @@ impl Store {
             branch,
             path: destination,
             commit_oid,
-        })
+        };
+        validate_worktree_destination_parent(&plan, &worktrees_root)?;
+        Ok(plan)
     }
 
     fn accept_worktree(
@@ -2633,7 +2767,11 @@ fn flush_pending_output(
         return Ok(None);
     };
     let turn = load_durable_turn(tx, pending.turn_id)?;
-    if turn.status != LiveTurnState::Streaming.as_str() {
+    let state = LiveTurnState::parse(&turn.status)?;
+    if !matches!(
+        state,
+        LiveTurnState::Streaming | LiveTurnState::Interrupting
+    ) {
         return Err(format!(
             "turn {} cannot accept assistant output while {}",
             pending.turn_id, turn.status
@@ -2695,11 +2833,19 @@ fn flush_pending_output(
         ],
     )
     .map_err(err)?;
-    tx.execute(
-        "UPDATE threads SET state = 'running', last_event_sequence = ?1 WHERE thread_id = ?2",
-        params![sequence as i64, turn.thread_id.to_string()],
-    )
-    .map_err(err)?;
+    if state == LiveTurnState::Streaming {
+        tx.execute(
+            "UPDATE threads SET state = 'running', last_event_sequence = ?1 WHERE thread_id = ?2",
+            params![sequence as i64, turn.thread_id.to_string()],
+        )
+        .map_err(err)?;
+    } else {
+        tx.execute(
+            "UPDATE threads SET last_event_sequence = ?1 WHERE thread_id = ?2",
+            params![sequence as i64, turn.thread_id.to_string()],
+        )
+        .map_err(err)?;
+    }
     for provider_event_id in &pending.provider_event_ids {
         tx.execute(
             "UPDATE provider_event_receipts SET applied_sequence = ?1
@@ -2714,7 +2860,7 @@ fn flush_pending_output(
     }
     Ok(Some(TurnChange {
         thread_id: turn.thread_id,
-        status: LiveTurnState::Streaming.as_str().into(),
+        status: state.as_str().into(),
     }))
 }
 
@@ -2844,7 +2990,11 @@ fn apply_provider_transition(
             (LiveTurnState::Failed, sequence)
         }
         ProviderEvent::Completed { session, .. } => {
-            require_live_turn_state(&turn, turn_id, &[LiveTurnState::Streaming])?;
+            require_live_turn_state(
+                &turn,
+                turn_id,
+                &[LiveTurnState::Streaming, LiveTurnState::Interrupting],
+            )?;
             if let Some(existing) = turn.provider_session_id.as_deref()
                 && existing != session.session_id
             {
@@ -3454,7 +3604,15 @@ fn validate_command(
     tx: &Transaction<'_>,
     command: &Command,
     provider_readiness: &ProviderReadiness,
+    runtime_root: &Path,
 ) -> AppResult<()> {
+    let payload = serde_json::to_vec(command).map_err(err)?;
+    if payload.len() > MAX_DURABLE_JSON_BYTES {
+        return Err(format!(
+            "command is {} serialized bytes; maximum is {MAX_DURABLE_JSON_BYTES}",
+            payload.len()
+        ));
+    }
     match command {
         Command::ProjectCreate {
             project_id, name, ..
@@ -3604,7 +3762,7 @@ fn validate_command(
                     "thread {thread_id} worktree projection does not match its durable plan"
                 ));
             }
-            verify_worktree(&plan).map_err(|error| {
+            verify_worktree(&plan, &runtime_root.join("worktrees")).map_err(|error| {
                 format!("thread {thread_id} worktree failed admission verification: {error}")
             })?;
             let turn_exists: bool = tx
@@ -3954,13 +4112,23 @@ struct WorktreeError {
     indeterminate: bool,
 }
 
-fn create_or_reconcile_worktree(plan: &WorktreePlan) -> Result<(), WorktreeError> {
+fn create_or_reconcile_worktree(
+    plan: &WorktreePlan,
+    worktrees_root: &Path,
+) -> Result<(), WorktreeError> {
     if plan.path.exists() {
-        return verify_worktree(plan).map_err(|message| WorktreeError {
+        return verify_worktree(plan, worktrees_root).map_err(|message| WorktreeError {
             message,
             indeterminate: true,
         });
     }
+
+    validate_worktree_destination_parent(plan, worktrees_root).map_err(|message| {
+        WorktreeError {
+            message,
+            indeterminate: true,
+        }
+    })?;
 
     let branch_exists = ProcessCommand::new("git")
         .arg("-C")
@@ -4017,24 +4185,67 @@ fn create_or_reconcile_worktree(plan: &WorktreePlan) -> Result<(), WorktreeError
             indeterminate: true,
         });
     }
-    verify_worktree(plan).map_err(|message| WorktreeError {
+    verify_worktree(plan, worktrees_root).map_err(|message| WorktreeError {
         message,
         indeterminate: true,
     })
 }
 
-fn verify_worktree(plan: &WorktreePlan) -> AppResult<()> {
+fn validate_worktree_destination_parent(
+    plan: &WorktreePlan,
+    worktrees_root: &Path,
+) -> AppResult<PathBuf> {
+    let root_parent = worktrees_root.parent().ok_or_else(|| {
+        format!(
+            "trusted worktrees root {} has no parent",
+            worktrees_root.display()
+        )
+    })?;
+    let root_name = worktrees_root.file_name().ok_or_else(|| {
+        format!(
+            "trusted worktrees root {} has no final component",
+            worktrees_root.display()
+        )
+    })?;
+    let expected_root =
+        portable_windows_path(root_parent.canonicalize().map_err(err)?.join(root_name));
+    let trusted_root = portable_windows_path(worktrees_root.canonicalize().map_err(err)?);
+    if trusted_root != expected_root {
+        return Err(format!(
+            "trusted worktrees root {} resolves through a redirect to {}",
+            worktrees_root.display(),
+            trusted_root.display()
+        ));
+    }
+
+    let expected_path = portable_windows_path(plan.path.clone());
+    if !expected_path.starts_with(&trusted_root) {
+        return Err(format!(
+            "worktree destination {} escaped trusted root {}",
+            plan.path.display(),
+            trusted_root.display()
+        ));
+    }
     let parent = plan
         .path
         .parent()
         .ok_or_else(|| format!("worktree path {} has no parent", plan.path.display()))?;
-    let name = plan.path.file_name().ok_or_else(|| {
-        format!(
-            "worktree path {} has no final component",
-            plan.path.display()
-        )
-    })?;
-    let expected_path = portable_windows_path(parent.canonicalize().map_err(err)?.join(name));
+    let expected_parent = expected_path
+        .parent()
+        .ok_or_else(|| format!("worktree path {} has no parent", expected_path.display()))?;
+    let resolved_parent = portable_windows_path(parent.canonicalize().map_err(err)?);
+    if resolved_parent != expected_parent || !resolved_parent.starts_with(&trusted_root) {
+        return Err(format!(
+            "worktree destination parent {} resolves through a redirect to {} outside its trusted path",
+            parent.display(),
+            resolved_parent.display()
+        ));
+    }
+    Ok(expected_path)
+}
+
+fn verify_worktree(plan: &WorktreePlan, worktrees_root: &Path) -> AppResult<()> {
+    let expected_path = validate_worktree_destination_parent(plan, worktrees_root)?;
     let resolved_path = portable_windows_path(plan.path.canonicalize().map_err(err)?);
     if resolved_path != expected_path {
         return Err(format!(
@@ -4253,7 +4464,7 @@ pub fn self_check() -> AppResult<Value> {
     if recovered_before.status != "succeeded" {
         return Err("crash-before-Git receipt did not recover".into());
     }
-    verify_worktree(&crash_before_plan)?;
+    verify_worktree(&crash_before_plan, &runtime.join("worktrees"))?;
     let duplicate_worktree = store.execute(CommandEnvelope::new(Command::WorktreeCreate {
         worktree_id: Uuid::new_v4(),
         thread_id: crash_before_thread,
@@ -4284,7 +4495,8 @@ pub fn self_check() -> AppResult<Value> {
         &crash_after_payload,
         &crash_after_plan,
     )?;
-    create_or_reconcile_worktree(&crash_after_plan).map_err(|error| error.message)?;
+    create_or_reconcile_worktree(&crash_after_plan, &runtime.join("worktrees"))
+        .map_err(|error| error.message)?;
     drop(store);
 
     let mut store = Store::open(db_path.clone(), runtime.clone())?;
@@ -4297,7 +4509,7 @@ pub fn self_check() -> AppResult<Value> {
     if recovered_after.status != "succeeded" {
         return Err("crash-after-Git receipt did not recover".into());
     }
-    verify_worktree(&crash_after_plan)?;
+    verify_worktree(&crash_after_plan, &runtime.join("worktrees"))?;
 
     let live_turn_id = Uuid::new_v4();
     let live_turn_envelope = CommandEnvelope::new(Command::LiveTurnStart {
@@ -4575,6 +4787,7 @@ fn run_git(cwd: &Path, args: &[&str]) -> AppResult<()> {
 mod tests {
     use super::*;
     use crate::live_turn::fake::{DeterministicFakeRunner, FakeScript};
+    use std::sync::atomic::AtomicUsize;
 
     struct IdleTestRunner;
 
@@ -4595,6 +4808,118 @@ mod tests {
 
     fn idle_test_runner() -> Box<dyn ProviderRunner> {
         Box::new(IdleTestRunner)
+    }
+
+    struct RejectedBatchRunner;
+
+    impl ProviderRunner for RejectedBatchRunner {
+        fn run(
+            self: Box<Self>,
+            commands: Receiver<ProviderCommand>,
+            events: SyncSender<ProviderEvent>,
+        ) -> AppResult<()> {
+            let command = commands.recv().map_err(err)?;
+            let turn_id = command
+                .turn_id()
+                .ok_or_else(|| "rejected-batch fixture expected a turn command".to_owned())?;
+            events
+                .send(ProviderEvent::Starting {
+                    turn_id,
+                    provider_event_id: "rejected-batch-starting".into(),
+                })
+                .map_err(err)?;
+            events
+                .send(ProviderEvent::SessionEstablished {
+                    turn_id,
+                    provider_event_id: "rejected-batch-session".into(),
+                    session: ProviderSessionCursor {
+                        session_id: String::new(),
+                        resume_cursor: "cursor".into(),
+                    },
+                })
+                .map_err(err)?;
+            Err("fixture runner rejected its normalized event".into())
+        }
+    }
+
+    const FAIRNESS_EVENT_COUNT: usize = 2_048;
+
+    struct SaturatedUntilInterruptedRunner {
+        interrupt_after: Arc<AtomicUsize>,
+    }
+
+    impl ProviderRunner for SaturatedUntilInterruptedRunner {
+        fn run(
+            self: Box<Self>,
+            commands: Receiver<ProviderCommand>,
+            events: SyncSender<ProviderEvent>,
+        ) -> AppResult<()> {
+            let command = commands.recv().map_err(err)?;
+            let turn_id = command
+                .turn_id()
+                .ok_or_else(|| "fairness fixture expected a start command".to_owned())?;
+            for event in [
+                ProviderEvent::Starting {
+                    turn_id,
+                    provider_event_id: "fairness-starting".into(),
+                },
+                ProviderEvent::SessionEstablished {
+                    turn_id,
+                    provider_event_id: "fairness-session".into(),
+                    session: ProviderSessionCursor {
+                        session_id: "fairness-session".into(),
+                        resume_cursor: "fairness-cursor".into(),
+                    },
+                },
+            ] {
+                events.send(event).map_err(err)?;
+            }
+
+            for index in 0..FAIRNESS_EVENT_COUNT {
+                events
+                    .send(ProviderEvent::AssistantOutput {
+                        turn_id,
+                        provider_event_id: format!("fairness-output-{index}"),
+                        delta: "x".into(),
+                        resume_cursor: Some(format!("fairness-cursor-{index}")),
+                    })
+                    .map_err(err)?;
+                if let Ok(command) = commands.try_recv() {
+                    return self.finish_after_control(command, turn_id, index + 1, &events);
+                }
+            }
+
+            let command = commands.recv_timeout(Duration::from_secs(2)).map_err(err)?;
+            self.finish_after_control(command, turn_id, FAIRNESS_EVENT_COUNT, &events)
+        }
+    }
+
+    impl SaturatedUntilInterruptedRunner {
+        fn finish_after_control(
+            &self,
+            command: ProviderCommand,
+            turn_id: Uuid,
+            sent: usize,
+            events: &SyncSender<ProviderEvent>,
+        ) -> AppResult<()> {
+            if !matches!(&command, ProviderCommand::Interrupt { turn_id: target } if *target == turn_id)
+            {
+                return Err(format!(
+                    "fairness fixture received unexpected command {command:?}"
+                ));
+            }
+            self.interrupt_after.store(sent, Ordering::Release);
+            events
+                .send(ProviderEvent::Completed {
+                    turn_id,
+                    provider_event_id: "fairness-completed".into(),
+                    session: ProviderSessionCursor {
+                        session_id: "fairness-session".into(),
+                        resume_cursor: "fairness-completed-cursor".into(),
+                    },
+                })
+                .map_err(err)
+        }
     }
 
     struct TestRoot(PathBuf);
@@ -5028,6 +5353,82 @@ mod tests {
     }
 
     #[test]
+    fn review_regression_buffered_output_cannot_rollback_interrupt_completion() {
+        let root = TestRoot::new("review-interrupt-completion");
+        let source = create_git_fixture(root.path());
+        let mut store = Store::open(root.path().join("state.sqlite"), root.path().to_path_buf())
+            .expect("open store");
+        let (_, thread_id, _) =
+            create_codex_thread_with_worktree(&mut store, &source, "Interrupt completion");
+        let turn_id = Uuid::new_v4();
+        let (_, start) = store
+            .execute_with_provider_command(CommandEnvelope::new(Command::LiveTurnStart {
+                turn_id,
+                thread_id,
+                text: "complete while interrupting".into(),
+            }))
+            .expect("accept turn");
+        assert!(start.is_some());
+        store
+            .apply_provider_events(&[
+                ProviderEvent::Starting {
+                    turn_id,
+                    provider_event_id: "interrupt-race-starting".into(),
+                },
+                ProviderEvent::SessionEstablished {
+                    turn_id,
+                    provider_event_id: "interrupt-race-session".into(),
+                    session: ProviderSessionCursor {
+                        session_id: "interrupt-race-session".into(),
+                        resume_cursor: "interrupt-race-cursor".into(),
+                    },
+                },
+            ])
+            .expect("establish session");
+        let (_, interrupt) = store
+            .execute_with_provider_command(CommandEnvelope::new(Command::LiveTurnInterrupt {
+                turn_id,
+                thread_id,
+            }))
+            .expect("persist interrupt");
+        assert!(interrupt.is_some());
+
+        store
+            .apply_provider_events(&[
+                ProviderEvent::AssistantOutput {
+                    turn_id,
+                    provider_event_id: "interrupt-race-output".into(),
+                    delta: "final buffered output".into(),
+                    resume_cursor: Some("interrupt-race-buffered".into()),
+                },
+                ProviderEvent::Completed {
+                    turn_id,
+                    provider_event_id: "interrupt-race-completed".into(),
+                    session: ProviderSessionCursor {
+                        session_id: "interrupt-race-session".into(),
+                        resume_cursor: "interrupt-race-completed".into(),
+                    },
+                },
+            ])
+            .expect("terminal provider truth must commit with buffered output");
+
+        assert_eq!(stored_turn_state(&store, turn_id), LiveTurnState::Completed);
+        let (thread_state, output): (String, String) = store
+            .conn
+            .query_row(
+                "SELECT th.state, m.body FROM threads th
+                 JOIN turns tr ON tr.thread_id = th.thread_id
+                 JOIN messages m ON m.sequence = tr.assistant_message_sequence
+                 WHERE tr.turn_id = ?1",
+                [turn_id.to_string()],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(thread_state, "waiting_user");
+        assert_eq!(output, "final buffered output");
+    }
+
+    #[test]
     fn fake_duplicate_provider_event_is_applied_exactly_once() {
         let root = TestRoot::new("fake-duplicate");
         let source = create_git_fixture(root.path());
@@ -5306,6 +5707,143 @@ mod tests {
         assert_eq!(output, "hello world");
         drop(handle);
         RuntimeLease::acquire(root.path()).expect("clean port shutdown releases the lease");
+    }
+
+    #[test]
+    fn review_regression_rejected_provider_batch_terminalizes_and_quarantines() {
+        let root = TestRoot::new("review-provider-rejection");
+        let source = create_git_fixture(root.path());
+        let thread_id;
+        {
+            let mut store =
+                Store::open(root.path().join("state.sqlite"), root.path().to_path_buf())
+                    .expect("open setup store");
+            (_, thread_id, _) =
+                create_codex_thread_with_worktree(&mut store, &source, "Rejected batch");
+        }
+        let handle = CoreHandle::spawn(
+            root.path().to_path_buf(),
+            || {},
+            Box::new(RejectedBatchRunner),
+        )
+        .expect("spawn rejection fixture");
+        let turn_id = Uuid::new_v4();
+        handle
+            .command(Command::LiveTurnStart {
+                turn_id,
+                thread_id,
+                text: "reject a malformed provider event".into(),
+            })
+            .expect("queue rejected turn");
+
+        let deadline = Instant::now() + Duration::from_secs(3);
+        let mut terminal = false;
+        let mut rejection_reported = false;
+        while Instant::now() < deadline && !terminal {
+            match handle.rx.recv_timeout(Duration::from_millis(100)) {
+                Ok(CoreEvent::TurnChanged { status, .. }) => {
+                    terminal = matches!(status.as_str(), "failed" | "indeterminate");
+                }
+                Ok(CoreEvent::Error(error)) => {
+                    rejection_reported |= error.contains("provider event batch was rejected");
+                }
+                Ok(_) | Err(RecvTimeoutError::Timeout) => {}
+                Err(RecvTimeoutError::Disconnected) => break,
+            }
+        }
+        assert!(terminal, "rejected provider batch left the turn active");
+        assert!(rejection_reported, "provider rejection was not surfaced");
+
+        let conn = Connection::open(root.path().join("state.sqlite")).unwrap();
+        let (status, active): (String, i64) = conn
+            .query_row(
+                "SELECT status, (SELECT COUNT(*) FROM turns WHERE status IN (
+                    'accepted', 'starting', 'streaming', 'awaiting_approval',
+                    'awaiting_user_input', 'interrupting'
+                 )) FROM turns WHERE turn_id = ?1",
+                [turn_id.to_string()],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(status, "indeterminate");
+        assert_eq!(active, 0);
+        drop(handle);
+        RuntimeLease::acquire(root.path()).expect("quarantined provider released the lease");
+    }
+
+    #[test]
+    fn review_regression_provider_batches_service_interrupts_before_queue_drain() {
+        let root = TestRoot::new("review-provider-fairness");
+        let source = create_git_fixture(root.path());
+        let thread_id;
+        {
+            let mut store =
+                Store::open(root.path().join("state.sqlite"), root.path().to_path_buf())
+                    .expect("open setup store");
+            (_, thread_id, _) =
+                create_codex_thread_with_worktree(&mut store, &source, "Fair provider");
+        }
+        let interrupt_after = Arc::new(AtomicUsize::new(FAIRNESS_EVENT_COUNT));
+        let handle = CoreHandle::spawn(
+            root.path().to_path_buf(),
+            || {},
+            Box::new(SaturatedUntilInterruptedRunner {
+                interrupt_after: Arc::clone(&interrupt_after),
+            }),
+        )
+        .expect("spawn saturated fixture");
+        let turn_id = Uuid::new_v4();
+        handle
+            .command(Command::LiveTurnStart {
+                turn_id,
+                thread_id,
+                text: "interrupt a saturated provider".into(),
+            })
+            .expect("queue saturated turn");
+
+        let deadline = Instant::now() + Duration::from_secs(6);
+        let mut interrupt_queued = false;
+        let mut completed = false;
+        while Instant::now() < deadline && !completed {
+            match handle.rx.recv_timeout(Duration::from_millis(100)) {
+                Ok(CoreEvent::TurnChanged { status, .. }) if status == "streaming" => {
+                    if !interrupt_queued {
+                        handle
+                            .command(Command::LiveTurnInterrupt { turn_id, thread_id })
+                            .expect("queue fair interrupt");
+                        interrupt_queued = true;
+                    }
+                }
+                Ok(CoreEvent::TurnChanged { status, .. }) if status == "completed" => {
+                    completed = true;
+                }
+                Ok(CoreEvent::CommandError { error, .. }) => {
+                    panic!("fair interrupt was rejected: {error}")
+                }
+                Ok(CoreEvent::Error(error)) => panic!("fair provider failed: {error}"),
+                Ok(_) | Err(RecvTimeoutError::Timeout) => {}
+                Err(RecvTimeoutError::Disconnected) => break,
+            }
+        }
+        assert!(interrupt_queued, "streaming state was never observed");
+        assert!(
+            completed,
+            "natural completion did not win the interrupt race"
+        );
+        assert!(
+            interrupt_after.load(Ordering::Acquire) < FAIRNESS_EVENT_COUNT,
+            "provider events drained completely before the queued interrupt was serviced"
+        );
+        let status: String = Connection::open(root.path().join("state.sqlite"))
+            .unwrap()
+            .query_row(
+                "SELECT status FROM turns WHERE turn_id = ?1",
+                [turn_id.to_string()],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(status, "completed");
+        drop(handle);
     }
 
     #[test]
@@ -5692,6 +6230,57 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM turns", [], |row| row.get(0))
             .expect("count unlaunched turns");
         assert_eq!(turns, 0);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn review_regression_worktree_parent_redirect_cannot_escape_runtime() {
+        use std::os::unix::fs::symlink;
+
+        let root = TestRoot::new("review-worktree-parent-redirect");
+        let source = create_git_fixture(root.path());
+        let runtime = root.path().join("runtime");
+        let worktrees_root = runtime.join("worktrees");
+        let outside = root.path().join("redirect-target");
+        fs::create_dir_all(&worktrees_root).expect("create trusted worktrees root");
+        fs::create_dir_all(&outside).expect("create redirect target");
+        let repo_name = source.file_name().expect("fixture repository name");
+        symlink(&outside, worktrees_root.join(repo_name)).expect("redirect repository parent");
+
+        let mut store =
+            Store::open(runtime.join("state.sqlite"), runtime).expect("open redirected store");
+        let project_id = Uuid::new_v4();
+        let thread_id = Uuid::new_v4();
+        store
+            .execute(CommandEnvelope::new(Command::ProjectCreate {
+                project_id,
+                name: "Redirect fixture".into(),
+                repo_path: source,
+            }))
+            .expect("create redirect project");
+        store
+            .execute(CommandEnvelope::new(Command::ThreadCreate {
+                thread_id,
+                project_id,
+                provider: Provider::Codex,
+                label: "Redirected parent".into(),
+            }))
+            .expect("create redirect thread");
+
+        let error = store
+            .execute(CommandEnvelope::new(Command::WorktreeCreate {
+                worktree_id: Uuid::new_v4(),
+                thread_id,
+            }))
+            .expect_err("redirected worktree parent must fail before Git");
+        assert!(error.contains("destination parent"), "{error}");
+        assert!(
+            fs::read_dir(&outside)
+                .expect("read redirect target")
+                .next()
+                .is_none(),
+            "Git created content outside the trusted worktrees root"
+        );
     }
 
     #[cfg(unix)]
@@ -6646,7 +7235,8 @@ mod tests {
             .execute(original.clone())
             .expect("replay original accepted command");
         assert_eq!(recovered.status, "succeeded");
-        verify_worktree(&original_plan).expect("verify recovered worktree");
+        verify_worktree(&original_plan, &root.path().join("runtime/worktrees"))
+            .expect("verify recovered worktree");
         assert_eq!(
             store
                 .load_receipt(original.command_id, &original_payload)

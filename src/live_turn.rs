@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::BTreeSet,
     path::PathBuf,
-    sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TryRecvError},
+    sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TryRecvError, TrySendError},
     thread,
     time::Duration,
 };
@@ -19,6 +20,7 @@ pub const MAX_DIAGNOSTIC_BYTES: usize = 32 * 1024;
 pub const MAX_INTERACTION_TEXT_BYTES: usize = 16 * 1024;
 pub const MAX_USER_INPUT_QUESTIONS: usize = 32;
 pub const MAX_USER_INPUT_ANSWERS: usize = 32;
+pub const MAX_DURABLE_JSON_BYTES: usize = 128 * 1024;
 
 /// Durable, provider-neutral authority policy for the Slice 2 live operator.
 ///
@@ -234,12 +236,19 @@ impl ProviderCommand {
                         "user-input response must contain 1..={MAX_USER_INPUT_ANSWERS} answers"
                     ));
                 }
+                let mut question_ids = BTreeSet::new();
                 for answer in answers {
                     bounded_nonempty(
                         "user-input question id",
                         &answer.question_id,
                         MAX_INTERACTION_ID_BYTES,
                     )?;
+                    if !question_ids.insert(answer.question_id.as_str()) {
+                        return Err(format!(
+                            "user-input response repeated question id {:?}",
+                            answer.question_id
+                        ));
+                    }
                     bounded(
                         "user-input answer",
                         &answer.answer,
@@ -249,7 +258,7 @@ impl ProviderCommand {
             }
             Self::Interrupt { .. } | Self::Shutdown => {}
         }
-        Ok(())
+        bounded_serialized("provider command", self, MAX_DURABLE_JSON_BYTES)
     }
 
     pub const fn turn_id(&self) -> Option<Uuid> {
@@ -440,12 +449,19 @@ impl ProviderEvent {
                         "user-input request must contain 1..={MAX_USER_INPUT_QUESTIONS} questions"
                     ));
                 }
+                let mut question_ids = BTreeSet::new();
                 for question in questions {
                     bounded_nonempty(
                         "user-input question id",
                         &question.question_id,
                         MAX_INTERACTION_ID_BYTES,
                     )?;
+                    if !question_ids.insert(question.question_id.as_str()) {
+                        return Err(format!(
+                            "user-input request repeated question id {:?}",
+                            question.question_id
+                        ));
+                    }
                     bounded_nonempty(
                         "user-input question prompt",
                         &question.prompt,
@@ -463,7 +479,7 @@ impl ProviderEvent {
             }
             Self::Starting { .. } => {}
         }
-        Ok(())
+        bounded_serialized("provider event", self, MAX_DURABLE_JSON_BYTES)
     }
 }
 
@@ -502,6 +518,16 @@ impl ProviderPort {
 
     pub fn command_sender(&self) -> &SyncSender<ProviderCommand> {
         self.commands.as_ref().expect("provider port is running")
+    }
+
+    pub fn try_send_command(
+        &self,
+        command: ProviderCommand,
+    ) -> Result<(), TrySendError<ProviderCommand>> {
+        match self.commands.as_ref() {
+            Some(commands) => commands.try_send(command),
+            None => Err(TrySendError::Disconnected(command)),
+        }
     }
 
     pub fn try_recv_event(&self) -> Result<ProviderEvent, TryRecvError> {
@@ -564,6 +590,18 @@ fn bounded_nonempty(label: &str, value: &str, max_bytes: usize) -> Result<(), St
         return Err(format!("{label} must not be empty"));
     }
     bounded(label, value, max_bytes)
+}
+
+fn bounded_serialized(label: &str, value: &impl Serialize, max_bytes: usize) -> Result<(), String> {
+    let encoded = serde_json::to_vec(value).map_err(|error| error.to_string())?;
+    if encoded.len() > max_bytes {
+        Err(format!(
+            "{label} is {} serialized bytes; maximum is {max_bytes}",
+            encoded.len()
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -856,6 +894,91 @@ mod tests {
             resume_cursor: None,
         };
         assert!(oversized.validate().is_err());
+    }
+
+    #[test]
+    fn review_regression_interaction_payloads_are_unique_and_durably_bounded() {
+        let turn_id = Uuid::new_v4();
+        let questions = (0..8)
+            .map(|index| UserInputQuestion {
+                question_id: format!("question-{index}"),
+                prompt: "x".repeat(MAX_INTERACTION_TEXT_BYTES),
+            })
+            .collect::<Vec<_>>();
+        let oversized_request = ProviderEvent::UserInputRequested {
+            turn_id,
+            provider_event_id: "input-event".into(),
+            interaction_id: "input-interaction".into(),
+            prompt: "Choose values".into(),
+            questions,
+        };
+        assert!(
+            oversized_request
+                .validate()
+                .expect_err("aggregate request must fit durable JSON")
+                .contains("serialized bytes")
+        );
+
+        let oversized_response = ProviderCommand::UserInputResponse {
+            turn_id,
+            interaction_id: "oversized-response".into(),
+            answers: (0..8)
+                .map(|index| UserInputAnswer {
+                    question_id: format!("question-{index}"),
+                    answer: "x".repeat(MAX_INTERACTION_TEXT_BYTES),
+                })
+                .collect(),
+        };
+        assert!(
+            oversized_response
+                .validate()
+                .expect_err("aggregate response must fit durable JSON")
+                .contains("serialized bytes")
+        );
+
+        let duplicate_request = ProviderEvent::UserInputRequested {
+            turn_id,
+            provider_event_id: "duplicate-event".into(),
+            interaction_id: "duplicate-interaction".into(),
+            prompt: "Choose values".into(),
+            questions: vec![
+                UserInputQuestion {
+                    question_id: "scope".into(),
+                    prompt: "First".into(),
+                },
+                UserInputQuestion {
+                    question_id: "scope".into(),
+                    prompt: "Second".into(),
+                },
+            ],
+        };
+        assert!(
+            duplicate_request
+                .validate()
+                .expect_err("duplicate question ids must fail")
+                .contains("repeated question id")
+        );
+
+        let duplicate_response = ProviderCommand::UserInputResponse {
+            turn_id,
+            interaction_id: "duplicate-response".into(),
+            answers: vec![
+                UserInputAnswer {
+                    question_id: "scope".into(),
+                    answer: "first".into(),
+                },
+                UserInputAnswer {
+                    question_id: "scope".into(),
+                    answer: "second".into(),
+                },
+            ],
+        };
+        assert!(
+            duplicate_response
+                .validate()
+                .expect_err("duplicate answer ids must fail")
+                .contains("repeated question id")
+        );
     }
 
     #[test]
