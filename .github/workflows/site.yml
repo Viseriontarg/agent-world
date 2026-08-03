@@ -5,12 +5,10 @@ on:
     branches: [main]
     paths:
       - "website/**"
-      - "docs/**"
       - ".github/workflows/site.yml"
   pull_request:
     paths:
       - "website/**"
-      - "docs/**"
       - ".github/workflows/site.yml"
   workflow_dispatch:
 
@@ -37,14 +35,23 @@ jobs:
       - name: Validate the dependency-free site
         run: python website/scripts/validate_site.py
 
+      - name: Enforce the public-site boundary
+        shell: bash
+        run: |
+          unexpected_docs="$(
+            git ls-files docs |
+              grep -Ev '^docs/(ARCHITECTURE\.md|assets/(agent-world-hero\.png|agent-world-ui\.png|social-preview\.png))$' || true
+          )"
+          if [[ -n "$unexpected_docs" ]]; then
+            echo "Unapproved files are tracked under docs/:" >&2
+            echo "$unexpected_docs" >&2
+            exit 1
+          fi
+
       - name: Smoke-test the published directory
         shell: bash
         run: |
-          mkdir -p _site
-          cp -R docs/. _site/
-          cp -R website/. _site/
-
-          python -m http.server 4173 --directory _site >"$RUNNER_TEMP/agent-world-site.log" 2>&1 &
+          python -m http.server 4173 --directory website >"$RUNNER_TEMP/agent-world-site.log" 2>&1 &
           server_pid=$!
           trap 'kill "$server_pid"' EXIT
 
@@ -83,17 +90,10 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
-      - name: Assemble published site
-        shell: bash
-        run: |
-          mkdir -p _site
-          cp -R docs/. _site/
-          cp -R website/. _site/
-
       - name: Upload the site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: _site
+          path: website
 
       - name: Deploy to GitHub Pages
         id: deployment

@@ -23,7 +23,6 @@
   <a href="#lean-by-measurement">Measurements</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="docs/ARCHITECTURE.md">Architecture</a> ·
-  
   <a href="#roadmap">Roadmap</a>
 </p>
 
