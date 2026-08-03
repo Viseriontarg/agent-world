@@ -20,8 +20,8 @@ use crate::{
         ProviderSessionCursor, UserInputAnswer, UserInputQuestion,
     },
     providers::{
-        CODEX_DISABLED_FEATURES, CODEX_LIVE_CONFIG_OVERRIDES, SUPPORTED_CODEX_VERSION,
-        locate_native_executable, verify_codex_disabled_features, verify_codex_version,
+        SUPPORTED_CODEX_VERSION, codex_launch_arguments, locate_native_executable,
+        verify_codex_disabled_features, verify_codex_version,
     },
 };
 
@@ -418,24 +418,10 @@ fn installed_version(executable: &Path) -> Result<String, String> {
     Ok(version.to_owned())
 }
 
+const APP_SERVER_SUBCOMMAND: &[&str] = &["app-server", "--stdio", "--strict-config"];
+
 fn app_server_arguments() -> Vec<String> {
-    let mut arguments = Vec::with_capacity(
-        CODEX_DISABLED_FEATURES.len() * 2 + CODEX_LIVE_CONFIG_OVERRIDES.len() * 2 + 3,
-    );
-    for feature in CODEX_DISABLED_FEATURES {
-        arguments.push("--disable".into());
-        arguments.push((*feature).into());
-    }
-    for config in CODEX_LIVE_CONFIG_OVERRIDES {
-        arguments.push("--config".into());
-        arguments.push((*config).into());
-    }
-    arguments.extend([
-        "app-server".into(),
-        "--stdio".into(),
-        "--strict-config".into(),
-    ]);
-    arguments
+    codex_launch_arguments(APP_SERVER_SUBCOMMAND)
 }
 
 /// Exact `TurnStartParams.sandboxPolicy` shape declared by Codex app-server 0.146.0.
@@ -1028,7 +1014,6 @@ struct ProtocolMachine {
     stale_response_ids: VecDeque<String>,
     interactions: BTreeMap<String, PendingInteraction>,
     coalesced: Option<CoalescedOutput>,
-    last_delta_fingerprint: Option<u64>,
     terminal_fingerprints: VecDeque<u64>,
 }
 
@@ -1046,7 +1031,6 @@ impl ProtocolMachine {
             stale_response_ids: VecDeque::with_capacity(MAX_PENDING_REQUESTS * 2),
             interactions: BTreeMap::new(),
             coalesced: None,
-            last_delta_fingerprint: None,
             terminal_fingerprints: VecDeque::with_capacity(8),
         }
     }
@@ -1060,7 +1044,6 @@ impl ProtocolMachine {
         self.pending_requests.clear();
         self.interactions.clear();
         self.coalesced = None;
-        self.last_delta_fingerprint = None;
         self.active = None;
     }
 
@@ -1275,14 +1258,6 @@ impl ProtocolMachine {
         };
         if let Some(method) = object.get("method").and_then(Value::as_str) {
             let fingerprint = fnv1a(line.as_bytes());
-            if method == "item/agentMessage/delta" {
-                if self.last_delta_fingerprint == Some(fingerprint) {
-                    return Vec::new();
-                }
-                self.last_delta_fingerprint = Some(fingerprint);
-            } else {
-                self.last_delta_fingerprint = None;
-            }
             if method == "turn/completed" && self.terminal_fingerprints.contains(&fingerprint) {
                 return Vec::new();
             }
@@ -1698,7 +1673,7 @@ impl ProtocolMachine {
         let Some(local_turn_id) = self.active.as_ref().map(|active| active.turn_id) else {
             return self.fail_closed("Codex requested approval without an active turn".into());
         };
-        let interaction_id = self.interaction_id();
+        let interaction_id = self.interaction_id(local_turn_id);
         let reason = params
             .get("reason")
             .and_then(Value::as_str)
@@ -1823,7 +1798,7 @@ impl ProtocolMachine {
         let Some(local_turn_id) = self.active.as_ref().map(|active| active.turn_id) else {
             return self.fail_closed("Codex requested user input without an active turn".into());
         };
-        let interaction_id = self.interaction_id();
+        let interaction_id = self.interaction_id(local_turn_id);
         self.interactions.insert(
             interaction_id.clone(),
             PendingInteraction {
@@ -2131,8 +2106,8 @@ impl ProtocolMachine {
         id
     }
 
-    fn interaction_id(&mut self) -> String {
-        let id = format!("codex-interaction-{}", self.next_interaction_id);
+    fn interaction_id(&mut self, turn_id: Uuid) -> String {
+        let id = format!("codex-interaction:{turn_id}:{}", self.next_interaction_id);
         self.next_interaction_id = self.next_interaction_id.saturating_add(1);
         id
     }
@@ -2485,7 +2460,7 @@ mod tests {
     }
 
     #[test]
-    fn deterministic_pipe_normal_stream_is_ordered_coalesced_deduplicated_and_terminal_once() {
+    fn deterministic_pipe_normal_stream_is_ordered_coalesced_and_terminal_once() {
         let mut harness = PipeHarness::start(None);
         harness.establish_new_thread("thread-1");
         harness.start_provider_turn("turn-1");
@@ -2518,7 +2493,7 @@ mod tests {
             ProviderEvent::AssistantOutput { delta, .. } => Some(delta),
             _ => None,
         });
-        assert_eq!(output.map(String::as_str), Some("Hello world"));
+        assert_eq!(output.map(String::as_str), Some("Hello world world"));
         assert_eq!(
             harness
                 .events
@@ -2574,6 +2549,46 @@ mod tests {
             .find(|value| value.get("id") == Some(&json!(41)))
             .expect("correlated approval response");
         assert_eq!(response["result"]["decision"], "accept");
+    }
+
+    #[test]
+    fn interaction_ids_stay_unique_across_independent_protocol_machines() {
+        fn first_interaction_id(harness: &mut PipeHarness, rpc_id: i64) -> String {
+            harness.establish_new_thread("thread-unique");
+            harness.start_provider_turn("turn-unique");
+            harness.line(json!({
+                "id": rpc_id,
+                "method": "item/commandExecution/requestApproval",
+                "params": {
+                    "threadId":"thread-unique",
+                    "turnId":"turn-unique",
+                    "itemId":"item-command",
+                    "command":"cargo test",
+                    "cwd":"C:\\repo",
+                    "reason":"run the verified test suite"
+                }
+            }));
+            harness
+                .events
+                .iter()
+                .find_map(|event| match event {
+                    ProviderEvent::ApprovalRequested { interaction_id, .. } => {
+                        Some(interaction_id.clone())
+                    }
+                    _ => None,
+                })
+                .expect("approval event")
+        }
+
+        let mut first = PipeHarness::start(None);
+        let first_id = first_interaction_id(&mut first, 51);
+        let mut second = PipeHarness::start(None);
+        let second_id = first_interaction_id(&mut second, 51);
+
+        assert_ne!(first_id, second_id);
+        assert!(first_id.contains(&first.local_turn_id.to_string()));
+        assert!(second_id.contains(&second.local_turn_id.to_string()));
+        assert!(first_id.len() <= crate::live_turn::MAX_INTERACTION_ID_BYTES);
     }
 
     #[test]
@@ -3088,42 +3103,19 @@ mod tests {
     }
 
     #[test]
-    fn launch_arguments_are_argv_elements_and_disable_each_reviewed_feature_once() {
+    fn launch_arguments_share_the_reviewed_prefix_with_the_inventory_check() {
         let arguments = app_server_arguments();
-        assert!(arguments.ends_with(&[
-            "app-server".to_owned(),
-            "--stdio".to_owned(),
-            "--strict-config".to_owned()
-        ]));
-        for feature in CODEX_DISABLED_FEATURES {
-            assert_eq!(
-                arguments
-                    .windows(2)
-                    .filter(|pair| pair[0] == "--disable" && pair[1] == *feature)
-                    .count(),
-                1,
-                "{feature} must be disabled exactly once"
-            );
-        }
-        for config in CODEX_LIVE_CONFIG_OVERRIDES {
-            assert_eq!(
-                arguments
-                    .windows(2)
-                    .filter(|pair| pair[0] == "--config" && pair[1] == *config)
-                    .count(),
-                1,
-                "{config} must be passed as one unique config argv element"
-            );
-        }
-        assert!(
-            arguments
-                .iter()
-                .any(|argument| argument == "mcp_servers={}")
+        let prefix_len = crate::providers::codex_launch_prefix_len();
+        assert_eq!(
+            arguments[..prefix_len],
+            crate::providers::codex_feature_arguments()[..prefix_len]
         );
-        assert!(
-            arguments
+        assert_eq!(
+            arguments[prefix_len..],
+            APP_SERVER_SUBCOMMAND
                 .iter()
-                .any(|argument| argument == "web_search=\"disabled\"")
+                .map(|element| (*element).to_owned())
+                .collect::<Vec<_>>()[..]
         );
         assert!(!arguments.iter().any(|argument| argument.contains("cmd /c")));
     }

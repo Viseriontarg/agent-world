@@ -298,9 +298,13 @@ fn json_contains_string(value: &Value, expected: &str) -> bool {
     }
 }
 
-pub(crate) fn codex_feature_arguments() -> Vec<String> {
+/// Builds the single reviewed launch prefix - one `--disable` pair per denied feature and one
+/// `--config` pair per pinned override - followed by `trailing` as further argv elements. Every
+/// Codex invocation goes through here so the inventory check and the live app-server are identical
+/// by construction.
+pub(crate) fn codex_launch_arguments(trailing: &[&str]) -> Vec<String> {
     let mut arguments = Vec::with_capacity(
-        CODEX_DISABLED_FEATURES.len() * 2 + CODEX_LIVE_CONFIG_OVERRIDES.len() * 2 + 2,
+        CODEX_DISABLED_FEATURES.len() * 2 + CODEX_LIVE_CONFIG_OVERRIDES.len() * 2 + trailing.len(),
     );
     for feature in CODEX_DISABLED_FEATURES {
         arguments.push("--disable".to_owned());
@@ -310,9 +314,19 @@ pub(crate) fn codex_feature_arguments() -> Vec<String> {
         arguments.push("--config".into());
         arguments.push((*config).into());
     }
-    arguments.push("features".into());
-    arguments.push("list".into());
+    arguments.extend(trailing.iter().map(|element| (*element).to_owned()));
     arguments
+}
+
+/// Number of argv elements every [`codex_launch_arguments`] call emits before its trailing
+/// subcommand.
+#[cfg(test)]
+pub(crate) fn codex_launch_prefix_len() -> usize {
+    CODEX_DISABLED_FEATURES.len() * 2 + CODEX_LIVE_CONFIG_OVERRIDES.len() * 2
+}
+
+pub(crate) fn codex_feature_arguments() -> Vec<String> {
+    codex_launch_arguments(&["features", "list"])
 }
 
 pub(crate) fn verify_codex_disabled_features(program: &Path) -> AppResult<()> {
