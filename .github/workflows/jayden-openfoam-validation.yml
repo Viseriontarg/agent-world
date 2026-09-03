@@ -44,11 +44,20 @@ jobs:
               'runTime.constant()/"fluentSolidField.csv"',
               'runTime.path()/runTime.constant()/"fluentSolidField.csv"'
           )
+          # Fluent's HDF5 cell coordinate is the arithmetic vertex mean;
+          # OpenFOAM reports the geometric polyhedral centroid. In the tapered
+          # cells they differ by only 9-38 micrometres. A 1 cm key is still
+          # far smaller than the 37-50 mm cell pitch and maps one-to-one.
+          s = s.replace(
+              'const scalar scale = 1.0e8;',
+              'const scalar scale = 1.0e2;'
+          )
           p.write_text(s)
           PY
           grep -q '#include "fvMesh.H"' _jayden_payload/applications/jaydenDryerROMFoam/jaydenDryerROMFoam.C
           ! grep -q '#include "fvCFD.H"' _jayden_payload/applications/jaydenDryerROMFoam/jaydenDryerROMFoam.C
           grep -q 'runTime.path()/runTime.constant()/"fluentSolidField.csv"' _jayden_payload/applications/jaydenDryerROMFoam/jaydenDryerROMFoam.C
+          grep -q 'const scalar scale = 1.0e2;' _jayden_payload/applications/jaydenDryerROMFoam/jaydenDryerROMFoam.C
 
       - name: Pull official OpenFOAM Foundation v11 container
         run: docker pull openfoam/openfoam11-paraview510
