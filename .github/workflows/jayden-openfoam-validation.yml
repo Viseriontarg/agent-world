@@ -63,7 +63,7 @@ jobs:
               source /opt/openfoam11/etc/bashrc || true
               test -n "${WM_PROJECT_DIR:-}"
               set -e
-              if [ ! -f /opt/openfoam11/src/finiteVolume/lnInclude/fvMesh.H ]; then
+              if [ ! -f /opt/openfoam11/src/finiteVolume/lnInclude/fvMesh.H ] || [ ! -f /opt/openfoam11/src/finiteVolume/lnInclude/volFields.H ]; then
                 echo "Restoring OpenFOAM-11 source headers"
                 rm -rf /tmp/of11
                 mkdir -p /tmp/of11
