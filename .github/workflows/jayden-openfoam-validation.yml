@@ -33,7 +33,7 @@ jobs:
       - name: Pull official OpenFOAM Foundation v11 container
         run: docker pull openfoam/openfoam11-paraview510
 
-      - name: Restore OpenFOAM development headers, build, and execute matrix
+      - name: Restore matching source headers, build, and execute matrix
         shell: bash
         run: |
           docker run --rm --user 0:0 \
@@ -43,14 +43,22 @@ jobs:
             openfoam/openfoam11-paraview510 \
             -lc '
               set -euo pipefail
+              source /opt/openfoam11/etc/bashrc
               if [ ! -f /opt/openfoam11/src/finiteVolume/lnInclude/fvCFD.H ]; then
-                apt-get update
-                DEBIAN_FRONTEND=noninteractive apt-get install --reinstall -y openfoam11
+                rm -rf /tmp/OpenFOAM-11-src /tmp/of11
+                mkdir -p /tmp/of11
+                wget -qO /tmp/OpenFOAM-11.tgz http://dl.openfoam.org/source/11
+                tar -xzf /tmp/OpenFOAM-11.tgz -C /tmp/of11
+                SRC_DIR=$(find /tmp/of11 -mindepth 1 -maxdepth 1 -type d -name "OpenFOAM-11*")
+                test -n "$SRC_DIR"
+                rm -rf /opt/openfoam11/src
+                cp -a "$SRC_DIR/src" /opt/openfoam11/src
+                wmakeLnIncludeAll > /work/log.lninclude 2>&1
               fi
               test -f /opt/openfoam11/src/finiteVolume/lnInclude/fvCFD.H
-              source /opt/openfoam11/etc/bashrc
               chmod +x scripts/run_all.sh
               scripts/run_all.sh
+              printf "OpenFOAM Foundation %s (%s)\n" "$WM_PROJECT_VERSION" "$WM_PROJECT_DIR" > openfoam-version.txt
             '
 
       - name: Verify solver evidence exists
@@ -72,7 +80,7 @@ jobs:
         run: |
           rm -rf _jayden_results
           mkdir -p _jayden_results/source _jayden_results/runs
-          for f in openfoam-version.txt log.wmake validation_summary.json; do
+          for f in openfoam-version.txt log.lninclude log.wmake validation_summary.json; do
             test -f "_jayden_payload/$f" && cp "_jayden_payload/$f" _jayden_results/ || true
           done
           for d in applications/jaydenDryerROMFoam case/constant case/system scripts; do
