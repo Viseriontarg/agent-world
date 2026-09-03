@@ -1,0 +1,147 @@
+name: Jayden OpenFOAM Smoke Debug
+
+on:
+  push:
+    branches:
+      - jayden-openfoam-validation-20260903
+    paths:
+      - '.github/workflows/jayden-openfoam-smoke-debug.yml'
+      - 'scratch/fluid-bed-drying-validation/solver/dryingFoamV2/**'
+      - 'scratch/fluid-bed-drying-validation/tools/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  smoke-debug:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare evidence directory
+        run: |
+          mkdir -p scratch/fluid-bed-drying-validation/runtime-debug
+          printf 'run_id=%s\nsha=%s\nref=%s\n' \
+            "$GITHUB_RUN_ID" "$GITHUB_SHA" "$GITHUB_REF_NAME" \
+            > scratch/fluid-bed-drying-validation/runtime-debug/run.txt
+
+      - name: Install OpenFOAM
+        id: install
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          ROOT="$GITHUB_WORKSPACE/scratch/fluid-bed-drying-validation"
+          LOG="$ROOT/runtime-debug/install.log"
+          {
+            set -x
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends wget ca-certificates gnupg software-properties-common python3
+            wget -qO- https://dl.openfoam.org/gpg.key | gpg --dearmor | sudo tee /usr/share/keyrings/openfoam.gpg >/dev/null
+            echo 'deb [signed-by=/usr/share/keyrings/openfoam.gpg] http://dl.openfoam.org/ubuntu jammy main' | sudo tee /etc/apt/sources.list.d/openfoam.list
+            sudo apt-get update
+            if apt-cache show openfoam12 >/dev/null 2>&1; then
+              sudo apt-get install -y openfoam12
+              echo '/opt/openfoam12/etc/bashrc' > "$ROOT/runtime-debug/bashrc-path.txt"
+            elif apt-cache show openfoam13 >/dev/null 2>&1; then
+              sudo apt-get install -y openfoam13
+              echo '/opt/openfoam13/etc/bashrc' > "$ROOT/runtime-debug/bashrc-path.txt"
+            else
+              echo 'No supported OpenFOAM package found.' >&2
+              exit 20
+            fi
+          } >"$LOG" 2>&1
+          rc=$?
+          echo "$rc" > "$ROOT/runtime-debug/status.install"
+          exit "$rc"
+
+      - name: Generate cases
+        id: generate
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          ROOT="$GITHUB_WORKSPACE/scratch/fluid-bed-drying-validation"
+          if [ "$(cat "$ROOT/runtime-debug/status.install" 2>/dev/null || echo 99)" != 0 ]; then
+            echo 90 > "$ROOT/runtime-debug/status.generate"
+            exit 90
+          fi
+          cd "$ROOT"
+          python3 tools/generate_cases.py > runtime-debug/generate.log 2>&1
+          rc=$?
+          echo "$rc" > runtime-debug/status.generate
+          exit "$rc"
+
+      - name: Compile solver
+        id: compile
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          ROOT="$GITHUB_WORKSPACE/scratch/fluid-bed-drying-validation"
+          if [ "$(cat "$ROOT/runtime-debug/status.generate" 2>/dev/null || echo 99)" != 0 ]; then
+            echo 91 > "$ROOT/runtime-debug/status.compile"
+            exit 91
+          fi
+          source "$(cat "$ROOT/runtime-debug/bashrc-path.txt")"
+          foamVersion > "$ROOT/runtime-debug/openfoam-version.txt" 2>&1
+          cd "$ROOT/solver/dryingFoamV2"
+          wmake > "$ROOT/runtime-debug/wmake.log" 2>&1
+          rc=$?
+          echo "$rc" > "$ROOT/runtime-debug/status.compile"
+          exit "$rc"
+
+      - name: Run 0.01-second smoke case
+        id: smoke
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          ROOT="$GITHUB_WORKSPACE/scratch/fluid-bed-drying-validation"
+          if [ "$(cat "$ROOT/runtime-debug/status.compile" 2>/dev/null || echo 99)" != 0 ]; then
+            echo 92 > "$ROOT/runtime-debug/status.smoke"
+            exit 92
+          fi
+          source "$(cat "$ROOT/runtime-debug/bashrc-path.txt")"
+          cd "$ROOT/cases/smoke"
+          blockMesh > "$ROOT/runtime-debug/smoke.blockMesh.log" 2>&1 || { rc=$?; echo "$rc" > "$ROOT/runtime-debug/status.smoke"; exit "$rc"; }
+          setFields > "$ROOT/runtime-debug/smoke.setFields.log" 2>&1 || { rc=$?; echo "$rc" > "$ROOT/runtime-debug/status.smoke"; exit "$rc"; }
+          dryingFoam > "$ROOT/runtime-debug/smoke.dryingFoam.log" 2>&1 || { rc=$?; echo "$rc" > "$ROOT/runtime-debug/status.smoke"; exit "$rc"; }
+          python3 "$ROOT/tools/validate_results.py" smoke --output "$ROOT/runtime-debug/smoke-validation" > "$ROOT/runtime-debug/smoke.validate.log" 2>&1
+          rc=$?
+          echo "$rc" > "$ROOT/runtime-debug/status.smoke"
+          exit "$rc"
+
+      - name: Commit debug evidence to branch
+        if: always()
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT="$GITHUB_WORKSPACE/scratch/fluid-bed-drying-validation"
+          {
+            echo "install=$(cat "$ROOT/runtime-debug/status.install" 2>/dev/null || echo missing)"
+            echo "generate=$(cat "$ROOT/runtime-debug/status.generate" 2>/dev/null || echo missing)"
+            echo "compile=$(cat "$ROOT/runtime-debug/status.compile" 2>/dev/null || echo missing)"
+            echo "smoke=$(cat "$ROOT/runtime-debug/status.smoke" 2>/dev/null || echo missing)"
+          } > "$ROOT/runtime-debug/status.txt"
+          git config user.name 'openfoam-validation-bot'
+          git config user.email 'openfoam-validation-bot@users.noreply.github.com'
+          git add -f scratch/fluid-bed-drying-validation/runtime-debug
+          git commit -m "cfd: record OpenFOAM smoke debug $GITHUB_RUN_ID" || exit 0
+          git push origin "HEAD:$GITHUB_REF_NAME"
+
+      - name: Enforce smoke gate
+        if: always()
+        shell: bash
+        run: |
+          ROOT="$GITHUB_WORKSPACE/scratch/fluid-bed-drying-validation"
+          cat "$ROOT/runtime-debug/status.txt"
+          test "$(cat "$ROOT/runtime-debug/status.install")" = 0
+          test "$(cat "$ROOT/runtime-debug/status.generate")" = 0
+          test "$(cat "$ROOT/runtime-debug/status.compile")" = 0
+          test "$(cat "$ROOT/runtime-debug/status.smoke")" = 0
