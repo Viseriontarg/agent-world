@@ -25,7 +25,7 @@ jobs:
         run: |
           rm -rf _jayden_payload
           mkdir -p _jayden_payload
-          cat .github/jayden-openfoam-payload.b64 .github/jayden-openfoam-payload.part2.b64 \
+          cat .github/jayden-openfoam-payload.part1.b64 .github/jayden-openfoam-payload.b64 \
             | base64 --decode > /tmp/jayden_payload.tar.gz
           echo "973e21c568f7461fe0f536554b633a96f5a8ed612e7a66eb347044b4361db4d2  /tmp/jayden_payload.tar.gz" | sha256sum -c -
           tar -xzf /tmp/jayden_payload.tar.gz -C _jayden_payload
