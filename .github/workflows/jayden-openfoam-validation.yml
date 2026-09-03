@@ -58,9 +58,13 @@ jobs:
                 test -n "$SRC_DIR"
                 rm -rf /opt/openfoam11/src
                 cp -a "$SRC_DIR/src" /opt/openfoam11/src
-                wmakeLnIncludeAll > /work/log.lninclude 2>&1
+                (
+                  cd /opt/openfoam11/src
+                  wmakeLnIncludeAll
+                ) > /work/log.lninclude 2>&1
               fi
               test -f /opt/openfoam11/src/finiteVolume/lnInclude/fvCFD.H
+              cd /work
               chmod +x scripts/run_all.sh
               scripts/run_all.sh
               printf "OpenFOAM Foundation %s (%s)\n" "$WM_PROJECT_VERSION" "$WM_PROJECT_DIR" > openfoam-version.txt
