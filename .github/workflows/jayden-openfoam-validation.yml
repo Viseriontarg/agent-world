@@ -1,1 +1,71 @@
-__WORKFLOW_CONTENT_PLACEHOLDER__
+name: Jayden OpenFOAM industrial dryer validation
+
+on:
+  push:
+    branches:
+      - jayden-openfoam-validation-20260903
+    paths:
+      - .github/workflows/jayden-openfoam-validation.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout isolated validation branch
+        uses: actions/checkout@v4
+
+      - name: Decode self-contained validation package
+        shell: bash
+        run: |
+          rm -rf _jayden_payload
+          mkdir -p _jayden_payload
+          base64 --decode .github/jayden-openfoam-payload.b64 > /tmp/jayden_payload.tar.gz
+          echo "973e21c568f7461fe0f536554b633a96f5a8ed612e7a66eb347044b4361db4d2  /tmp/jayden_payload.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/jayden_payload.tar.gz -C _jayden_payload
+
+      - name: Pull official OpenFOAM Foundation v11 container
+        run: docker pull openfoam/openfoam11-paraview510
+
+      - name: Build and execute validation matrix
+        shell: bash
+        run: |
+          docker run --rm --user 0:0 \
+            -v "$PWD/_jayden_payload:/work" \
+            -w /work \
+            openfoam/openfoam11-paraview510 \
+            bash -lc 'source /opt/openfoam11/etc/bashrc && chmod +x scripts/run_all.sh && scripts/run_all.sh'
+
+      - name: Collect evidence
+        if: always()
+        shell: bash
+        run: |
+          rm -rf _jayden_results
+          mkdir -p _jayden_results/source _jayden_results/runs
+          cp _jayden_payload/openfoam-version.txt _jayden_results/ 2>/dev/null || true
+          cp _jayden_payload/log.wmake _jayden_results/ 2>/dev/null || true
+          cp _jayden_payload/validation_summary.json _jayden_results/ 2>/dev/null || true
+          cp -a _jayden_payload/applications/jaydenDryerROMFoam _jayden_results/source/
+          cp -a _jayden_payload/case/constant _jayden_results/source/
+          cp -a _jayden_payload/case/system _jayden_results/source/
+          cp -a _jayden_payload/scripts _jayden_results/source/
+          for c in low central high central_ref; do
+            mkdir -p "_jayden_results/runs/$c"
+            find "_jayden_payload/runs/$c" -maxdepth 1 -name 'log.*' -exec cp {} "_jayden_results/runs/$c/" \; 2>/dev/null || true
+            test -d "_jayden_payload/runs/$c/postProcessing" && cp -a "_jayden_payload/runs/$c/postProcessing" "_jayden_results/runs/$c/" || true
+          done
+          find _jayden_results -type f -print0 | sort -z | xargs -0 sha256sum > _jayden_results/SHA256SUMS.txt
+
+      - name: Upload evidence artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jayden-openfoam-validation-results
+          path: _jayden_results
+          if-no-files-found: error
+          retention-days: 7
