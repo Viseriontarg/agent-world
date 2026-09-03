@@ -46,9 +46,12 @@ jobs:
               source /opt/openfoam11/etc/bashrc
               set -u
               if [ ! -f /opt/openfoam11/src/finiteVolume/lnInclude/fvCFD.H ]; then
+                echo "Restoring OpenFOAM-11 source headers"
                 rm -rf /tmp/of11
                 mkdir -p /tmp/of11
-                wget -qO /tmp/OpenFOAM-11.tgz http://dl.openfoam.org/source/11
+                curl --fail --location --retry 3 --show-error \
+                  --output /tmp/OpenFOAM-11.tgz \
+                  https://github.com/OpenFOAM/OpenFOAM-11/archive/refs/heads/master.tar.gz
                 tar -xzf /tmp/OpenFOAM-11.tgz -C /tmp/of11
                 SRC_DIR=$(find /tmp/of11 -mindepth 1 -maxdepth 1 -type d -name "OpenFOAM-11*")
                 test -n "$SRC_DIR"
