@@ -33,7 +33,7 @@ jobs:
       - name: Pull official OpenFOAM Foundation v11 container
         run: docker pull openfoam/openfoam11-paraview510
 
-      - name: Build and execute validation matrix
+      - name: Restore OpenFOAM development headers, build, and execute matrix
         shell: bash
         run: |
           docker run --rm --user 0:0 \
@@ -41,7 +41,17 @@ jobs:
             -v "$PWD/_jayden_payload:/work" \
             -w /work \
             openfoam/openfoam11-paraview510 \
-            -lc 'source /opt/openfoam11/etc/bashrc && chmod +x scripts/run_all.sh && scripts/run_all.sh'
+            -lc '
+              set -euo pipefail
+              if [ ! -f /opt/openfoam11/src/finiteVolume/lnInclude/fvCFD.H ]; then
+                apt-get update
+                DEBIAN_FRONTEND=noninteractive apt-get install --reinstall -y openfoam11
+              fi
+              test -f /opt/openfoam11/src/finiteVolume/lnInclude/fvCFD.H
+              source /opt/openfoam11/etc/bashrc
+              chmod +x scripts/run_all.sh
+              scripts/run_all.sh
+            '
 
       - name: Verify solver evidence exists
         shell: bash
