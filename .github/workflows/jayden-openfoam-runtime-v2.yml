@@ -1,0 +1,147 @@
+name: Jayden OpenFOAM Runtime V2
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scratch/fluid-bed-drying-validation/**'
+      - '.github/workflows/jayden-openfoam-runtime-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate-drying-model:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Check out validation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install OpenFOAM Foundation package
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends wget ca-certificates gnupg software-properties-common python3
+          wget -qO- https://dl.openfoam.org/gpg.key | gpg --dearmor | sudo tee /usr/share/keyrings/openfoam.gpg >/dev/null
+          echo 'deb [signed-by=/usr/share/keyrings/openfoam.gpg] http://dl.openfoam.org/ubuntu jammy main' | sudo tee /etc/apt/sources.list.d/openfoam.list
+          sudo apt-get update
+          if apt-cache show openfoam12 >/dev/null 2>&1; then
+            sudo apt-get install -y openfoam12
+            echo 'OF_BASHRC=/opt/openfoam12/etc/bashrc' >> "$GITHUB_ENV"
+            echo 'OF_VERSION=12' >> "$GITHUB_ENV"
+          elif apt-cache show openfoam13 >/dev/null 2>&1; then
+            sudo apt-get install -y openfoam13
+            echo 'OF_BASHRC=/opt/openfoam13/etc/bashrc' >> "$GITHUB_ENV"
+            echo 'OF_VERSION=13' >> "$GITHUB_ENV"
+          else
+            echo 'Neither openfoam12 nor openfoam13 is available from the official package repository.' >&2
+            exit 1
+          fi
+
+      - name: Generate deterministic cases
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd scratch/fluid-bed-drying-validation
+          python3 tools/generate_cases.py | tee generate_cases.log
+
+      - name: Compile dimensionally checked solver
+        shell: bash
+        run: |
+          set -euxo pipefail
+          source "$OF_BASHRC"
+          foamVersion | tee scratch/fluid-bed-drying-validation/openfoam-version.txt
+          cd scratch/fluid-bed-drying-validation/solver/dryingFoamV2
+          wmake 2>&1 | tee ../../log.wmake
+          command -v dryingFoam
+
+      - name: Run smoke gate
+        shell: bash
+        run: |
+          set -euxo pipefail
+          source "$OF_BASHRC"
+          ROOT="$GITHUB_WORKSPACE/scratch/fluid-bed-drying-validation"
+          CASE="$ROOT/cases/smoke"
+          cd "$CASE"
+          blockMesh 2>&1 | tee log.blockMesh
+          setFields 2>&1 | tee log.setFields
+          dryingFoam 2>&1 | tee log.dryingFoam
+          python3 "$ROOT/tools/validate_results.py" smoke --output "$ROOT/results/smoke-gate"
+
+      - name: Run semolina methodology benchmark
+        shell: bash
+        run: |
+          set -euxo pipefail
+          source "$OF_BASHRC"
+          ROOT="$GITHUB_WORKSPACE/scratch/fluid-bed-drying-validation"
+          CASE="$ROOT/cases/semolina"
+          cd "$CASE"
+          blockMesh 2>&1 | tee log.blockMesh
+          setFields 2>&1 | tee log.setFields
+          dryingFoam 2>&1 | tee log.dryingFoam
+
+      - name: Run industrial low-central-high kinetics
+        shell: bash
+        run: |
+          set -euxo pipefail
+          source "$OF_BASHRC"
+          ROOT="$GITHUB_WORKSPACE/scratch/fluid-bed-drying-validation"
+          for NAME in industrial_low industrial_central industrial_high; do
+            CASE="$ROOT/cases/$NAME"
+            cd "$CASE"
+            blockMesh 2>&1 | tee log.blockMesh
+            setFields 2>&1 | tee log.setFields
+            dryingFoam 2>&1 | tee log.dryingFoam
+          done
+
+      - name: Validate all cases and collect evidence
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT="$GITHUB_WORKSPACE/scratch/fluid-bed-drying-validation"
+          mkdir -p "$ROOT/results/evidence"
+          python3 "$ROOT/tools/validate_results.py" \
+            smoke semolina industrial_low industrial_central industrial_high \
+            --output "$ROOT/results"
+          for NAME in smoke semolina industrial_low industrial_central industrial_high; do
+            cp "$ROOT/cases/$NAME/postProcessing/drying.csv" "$ROOT/results/evidence/$NAME.csv"
+            cp "$ROOT/cases/$NAME/case_metadata.json" "$ROOT/results/evidence/$NAME.metadata.json"
+            cp "$ROOT/cases/$NAME/log.dryingFoam" "$ROOT/results/evidence/$NAME.log.dryingFoam"
+            cp "$ROOT/cases/$NAME/log.blockMesh" "$ROOT/results/evidence/$NAME.log.blockMesh"
+            cp "$ROOT/cases/$NAME/log.setFields" "$ROOT/results/evidence/$NAME.log.setFields"
+          done
+          cp "$ROOT/log.wmake" "$ROOT/results/evidence/log.wmake"
+          cp "$ROOT/openfoam-version.txt" "$ROOT/results/evidence/openfoam-version.txt"
+          tar -C "$ROOT" -czf "$ROOT/results/openfoam-runtime-evidence.tar.gz" \
+            results/report.md results/summary.json results/evidence
+          cat "$ROOT/results/report.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jayden-openfoam-runtime-${{ github.run_id }}
+          path: |
+            scratch/fluid-bed-drying-validation/results
+            scratch/fluid-bed-drying-validation/log.wmake
+            scratch/fluid-bed-drying-validation/openfoam-version.txt
+            scratch/fluid-bed-drying-validation/cases/*/log.*
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Commit verified result summary to validation branch
+        if: success() && github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git config user.name 'openfoam-validation-bot'
+          git config user.email 'openfoam-validation-bot@users.noreply.github.com'
+          git add -f scratch/fluid-bed-drying-validation/results
+          git commit -m "cfd: record verified OpenFOAM runtime $GITHUB_RUN_ID" || exit 0
+          git push origin "HEAD:${{ github.head_ref }}"
