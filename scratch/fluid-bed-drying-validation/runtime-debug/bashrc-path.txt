@@ -1,0 +1,1 @@
+/opt/openfoam12/etc/bashrc

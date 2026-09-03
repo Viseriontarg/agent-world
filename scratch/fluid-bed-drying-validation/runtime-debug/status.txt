@@ -1,0 +1,4 @@
+install=0
+generate=0
+compile=2
+smoke=92
