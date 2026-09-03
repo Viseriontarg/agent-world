@@ -20,7 +20,7 @@ jobs:
       - name: Checkout isolated validation branch
         uses: actions/checkout@v4
 
-      - name: Decode self-contained validation package
+      - name: Decode and patch self-contained validation package
         shell: bash
         run: |
           rm -rf _jayden_payload
@@ -29,6 +29,23 @@ jobs:
             | base64 --decode > /tmp/jayden_payload.tar.gz
           echo "973e21c568f7461fe0f536554b633a96f5a8ed612e7a66eb347044b4361db4d2  /tmp/jayden_payload.tar.gz" | sha256sum -c -
           tar -xzf /tmp/jayden_payload.tar.gz -C _jayden_payload
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('_jayden_payload/applications/jaydenDryerROMFoam/jaydenDryerROMFoam.C')
+          s = p.read_text()
+          s = s.replace(
+              '#include "fvCFD.H"',
+              '#include "argList.H"\n#include "Time.H"\n#include "fvMesh.H"\n#include "volFields.H"\n#include "IOdictionary.H"\n#include "OSspecific.H"'
+          )
+          duplicate = (
+              '        Info<< "Imported " << records.size()\n'
+              '        Info<< "Imported " << records.size()\n'
+          )
+          s = s.replace(duplicate, '        Info<< "Imported " << records.size()\n')
+          p.write_text(s)
+          PY
+          grep -q '#include "fvMesh.H"' _jayden_payload/applications/jaydenDryerROMFoam/jaydenDryerROMFoam.C
+          ! grep -q '#include "fvCFD.H"' _jayden_payload/applications/jaydenDryerROMFoam/jaydenDryerROMFoam.C
 
       - name: Pull official OpenFOAM Foundation v11 container
         run: docker pull openfoam/openfoam11-paraview510
@@ -46,7 +63,7 @@ jobs:
               source /opt/openfoam11/etc/bashrc || true
               test -n "${WM_PROJECT_DIR:-}"
               set -e
-              if [ ! -f /opt/openfoam11/src/finiteVolume/lnInclude/fvCFD.H ]; then
+              if [ ! -f /opt/openfoam11/src/finiteVolume/lnInclude/fvMesh.H ]; then
                 echo "Restoring OpenFOAM-11 source headers"
                 rm -rf /tmp/of11
                 mkdir -p /tmp/of11
@@ -63,7 +80,8 @@ jobs:
                   wmakeLnIncludeAll || true
                 ) > /work/log.lninclude 2>&1
               fi
-              test -f /opt/openfoam11/src/finiteVolume/lnInclude/fvCFD.H
+              test -f /opt/openfoam11/src/finiteVolume/lnInclude/fvMesh.H
+              test -f /opt/openfoam11/src/finiteVolume/lnInclude/volFields.H
               cd /work
               chmod +x scripts/run_all.sh
               scripts/run_all.sh
