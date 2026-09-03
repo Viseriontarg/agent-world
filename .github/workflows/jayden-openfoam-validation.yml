@@ -37,10 +37,24 @@ jobs:
         shell: bash
         run: |
           docker run --rm --user 0:0 \
+            --entrypoint /bin/bash \
             -v "$PWD/_jayden_payload:/work" \
             -w /work \
             openfoam/openfoam11-paraview510 \
-            bash -lc 'source /opt/openfoam11/etc/bashrc && chmod +x scripts/run_all.sh && scripts/run_all.sh'
+            -lc 'source /opt/openfoam11/etc/bashrc && chmod +x scripts/run_all.sh && scripts/run_all.sh'
+
+      - name: Verify solver evidence exists
+        shell: bash
+        run: |
+          test -s _jayden_payload/openfoam-version.txt
+          test -s _jayden_payload/log.wmake
+          test -s _jayden_payload/validation_summary.json
+          for c in low central high central_ref; do
+            test -s "_jayden_payload/runs/$c/log.blockMesh"
+            test -s "_jayden_payload/runs/$c/log.checkMesh"
+            test -s "_jayden_payload/runs/$c/log.jaydenDryerROMFoam"
+            test -s "_jayden_payload/runs/$c/postProcessing/dryerMetrics/$c.csv"
+          done
 
       - name: Collect evidence
         if: always()
