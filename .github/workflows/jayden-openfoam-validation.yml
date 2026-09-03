@@ -42,10 +42,11 @@ jobs:
             -w /work \
             openfoam/openfoam11-paraview510 \
             -lc '
-              set -euo pipefail
+              set -eo pipefail
               source /opt/openfoam11/etc/bashrc
+              set -u
               if [ ! -f /opt/openfoam11/src/finiteVolume/lnInclude/fvCFD.H ]; then
-                rm -rf /tmp/OpenFOAM-11-src /tmp/of11
+                rm -rf /tmp/of11
                 mkdir -p /tmp/of11
                 wget -qO /tmp/OpenFOAM-11.tgz http://dl.openfoam.org/source/11
                 tar -xzf /tmp/OpenFOAM-11.tgz -C /tmp/of11
