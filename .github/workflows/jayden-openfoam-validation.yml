@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - jayden-openfoam-validation-20260903
-    paths:
-      - .github/workflows/jayden-openfoam-validation.yml
   workflow_dispatch:
 
 permissions:
@@ -42,10 +40,15 @@ jobs:
               '        Info<< "Imported " << records.size()\n'
           )
           s = s.replace(duplicate, '        Info<< "Imported " << records.size()\n')
+          s = s.replace(
+              'runTime.constant()/"fluentSolidField.csv"',
+              'runTime.path()/runTime.constant()/"fluentSolidField.csv"'
+          )
           p.write_text(s)
           PY
           grep -q '#include "fvMesh.H"' _jayden_payload/applications/jaydenDryerROMFoam/jaydenDryerROMFoam.C
           ! grep -q '#include "fvCFD.H"' _jayden_payload/applications/jaydenDryerROMFoam/jaydenDryerROMFoam.C
+          grep -q 'runTime.path()/runTime.constant()/"fluentSolidField.csv"' _jayden_payload/applications/jaydenDryerROMFoam/jaydenDryerROMFoam.C
 
       - name: Pull official OpenFOAM Foundation v11 container
         run: docker pull openfoam/openfoam11-paraview510
