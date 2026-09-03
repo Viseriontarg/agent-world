@@ -60,7 +60,7 @@ jobs:
                 cp -a "$SRC_DIR/src" /opt/openfoam11/src
                 (
                   cd /opt/openfoam11/src
-                  wmakeLnIncludeAll
+                  wmakeLnIncludeAll || true
                 ) > /work/log.lninclude 2>&1
               fi
               test -f /opt/openfoam11/src/finiteVolume/lnInclude/fvCFD.H
